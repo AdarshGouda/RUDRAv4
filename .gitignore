@@ -1,0 +1,28 @@
+# ROS 2 / colcon generated folders
+build/
+install/
+log/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+
+# IDE
+.vscode/
+.idea/
+
+# OS / temp
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
