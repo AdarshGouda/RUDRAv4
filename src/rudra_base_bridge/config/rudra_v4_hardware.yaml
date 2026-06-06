@@ -1,0 +1,33 @@
+ps2_uno_to_teensy:
+  ros__parameters:
+    # Replace with actual persistent ports from: ls -l /dev/serial/by-id/
+    uno_port: "/dev/serial/by-id/REPLACE_WITH_UNO_PORT"
+    teensy_port: "/dev/serial/by-id/REPLACE_WITH_TEENSY_PORT"
+
+    baud: 115200
+    timer_period_sec: 0.02
+    command_timeout_sec: 0.30
+
+    # RUDRAv3 PS2 behavior
+    select_as_enable: true
+    axis_min: 0
+    axis_max: 225
+    deadband: 5
+    max_sabertooth_cmd: 127
+
+    # Published /cmd_vel preview for ROS2 integration
+    publish_cmd_vel: true
+    max_linear_speed_mps: 1.20
+    max_angular_speed_radps: 2.50
+    send_stop_when_disabled: true
+
+cmd_vel_to_teensy:
+  ros__parameters:
+    teensy_port: "/dev/serial/by-id/REPLACE_WITH_TEENSY_PORT"
+    baud: 115200
+    wheelbase_m: 0.29
+    max_linear_speed_mps: 1.20
+    max_sabertooth_cmd: 127
+    cmd_timeout_sec: 0.30
+    timer_period_sec: 0.02
+    enable_on_nonzero_cmd: true
