@@ -67,7 +67,7 @@ Use `/dev/serial/by-id/...` instead of `/dev/ttyACM0` when possible.
 bash scripts/run_ps2_bridge.sh
 ```
 
-For battery bringup, headless checks, and optional boot autostart, open:
+For battery bringup and headless checks, open:
 
 ```text
 docs/startup.html

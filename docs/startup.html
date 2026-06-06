@@ -256,37 +256,24 @@ ros2 topic echo --once /rudra/teensy_ack</code></pre>
     </section>
 
     <section>
-      <h2>Launch on NUC Boot</h2>
-      <p>Yes, RUDRA can launch automatically when the NUC boots. A systemd service is the cleanest approach.</p>
-      <h3>Create the service</h3>
-      <pre><code>sudo nano /etc/systemd/system/rudra-ps2-bridge.service</code></pre>
-      <p>Paste this service:</p>
-      <pre><code>[Unit]
-Description=RUDRAv4 PS2 to Teensy bridge
-After=network-online.target
-Wants=network-online.target
-
-[Service]
-Type=simple
-User=rudra
-WorkingDirectory=/home/rudra/Projects/RUDRAv4
-ExecStartPre=/bin/sleep 5
-ExecStart=/bin/bash -lc 'source /opt/ros/lyrical/setup.bash &amp;&amp; source /home/rudra/Projects/RUDRAv4/install/setup.bash &amp;&amp; ros2 launch rudra_base_bridge ps2_to_teensy.launch.py config:=/home/rudra/Projects/RUDRAv4/src/rudra_base_bridge/config/rudra_v4_hardware.yaml'
-Restart=on-failure
-RestartSec=2
-
-[Install]
-WantedBy=multi-user.target</code></pre>
-      <h3>Enable and start</h3>
-      <pre><code>sudo systemctl daemon-reload
-sudo systemctl enable rudra-ps2-bridge.service
-sudo systemctl start rudra-ps2-bridge.service</code></pre>
-      <h3>Check status without a monitor</h3>
-      <pre><code>systemctl status rudra-ps2-bridge.service --no-pager
-journalctl -u rudra-ps2-bridge.service -f</code></pre>
-      <h3>Stop or disable autostart</h3>
-      <pre><code>sudo systemctl stop rudra-ps2-bridge.service
-sudo systemctl disable rudra-ps2-bridge.service</code></pre>
+      <h2>Manual SSH Launch</h2>
+      <p>For field use, SSH into the NUC from another laptop and launch RUDRA manually. This keeps startup intentional while the Sabertooth battery is connected.</p>
+      <h3>Connect</h3>
+      <pre><code>ssh rudra@rudra.local</code></pre>
+      <p>If mDNS is unavailable, use the NUC IP address instead.</p>
+      <pre><code>ssh rudra@&lt;NUC_IP_ADDRESS&gt;</code></pre>
+      <h3>Launch</h3>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_bridge.sh</code></pre>
+      <h3>Check from another SSH terminal</h3>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+ros2 node list
+ros2 topic echo /rudra/drive_cmd
+ros2 topic echo /rudra/teensy_ack</code></pre>
     </section>
 
     <section>

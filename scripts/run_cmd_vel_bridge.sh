@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -eo pipefail
 cd "$(dirname "$0")/.."
 source /opt/ros/lyrical/setup.bash
 source install/setup.bash
