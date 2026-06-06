@@ -1,4 +1,5 @@
 from glob import glob
+
 from setuptools import find_packages, setup
 
 package_name = 'rudra_base_bridge'
@@ -12,8 +13,14 @@ setup(
         ('share/' + package_name, ['package.xml']),
         ('share/' + package_name + '/launch', glob('launch/*.launch.py')),
         ('share/' + package_name + '/config', glob('config/*.yaml')),
-        ('share/' + package_name + '/firmware/uno_ps2_plain_serial', glob('firmware/uno_ps2_plain_serial/*')),
-        ('share/' + package_name + '/firmware/teensy_sabertooth_serial_controller', glob('firmware/teensy_sabertooth_serial_controller/*')),
+        (
+            'share/' + package_name + '/firmware/uno_ps2_plain_serial',
+            glob('firmware/uno_ps2_plain_serial/*'),
+        ),
+        (
+            'share/' + package_name + '/firmware/teensy_sabertooth_serial_controller',
+            glob('firmware/teensy_sabertooth_serial_controller/*'),
+        ),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,

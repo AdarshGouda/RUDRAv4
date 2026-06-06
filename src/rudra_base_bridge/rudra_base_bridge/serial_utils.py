@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import time
 from dataclasses import dataclass
+import time
 from typing import Optional
 
 import serial
@@ -29,7 +29,7 @@ class LineSerial:
     def connected(self) -> bool:
         return bool(self._ser and self._ser.is_open)
 
-    def open(self) -> bool:
+    def _open(self) -> bool:
         if self.connected:
             return True
 
@@ -55,7 +55,7 @@ class LineSerial:
         self._ser = None
 
     def readline(self) -> SerialLineResult:
-        if not self.open() or self._ser is None:
+        if not self._open() or self._ser is None:
             return SerialLineResult(None, 'not_connected')
         try:
             raw = self._ser.readline()
@@ -67,7 +67,7 @@ class LineSerial:
             return SerialLineResult(None, str(exc))
 
     def write_line(self, line: str) -> bool:
-        if not self.open() or self._ser is None:
+        if not self._open() or self._ser is None:
             return False
         try:
             if not line.endswith('\n'):
@@ -80,7 +80,7 @@ class LineSerial:
 
     def drain_available(self, max_lines: int = 10) -> list[str]:
         lines: list[str] = []
-        if not self.open() or self._ser is None:
+        if not self._open() or self._ser is None:
             return lines
         try:
             count = 0

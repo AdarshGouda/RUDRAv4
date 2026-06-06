@@ -202,6 +202,30 @@ bash scripts/run_ps2_bridge.sh</code></pre>
     </section>
 
     <section>
+      <h2>LiDAR Obstacle Guard</h2>
+      <p>The PS2 and <code>/cmd_vel</code> bridges subscribe to <code>/scan</code>. Forward drive slows inside the configured front cone and stops inside the stop distance. Reverse and turn-in-place commands remain available.</p>
+      <p>RUDRAv4 uses the Slamtec ROS2 driver package <code>sllidar_ros2</code>. RUDRAv3 had the RPLIDAR launch line commented out; in RUDRAv4 the launch entrypoint is explicit.</p>
+      <pre><code>ros2 pkg list | grep sllidar_ros2</code></pre>
+      <p>If the package is missing, add it to the workspace and rebuild.</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4/src
+git clone https://github.com/Slamtec/sllidar_ros2.git
+cd /home/rudra/Projects/RUDRAv4
+colcon build
+source install/setup.bash</code></pre>
+      <p>Find the LiDAR USB adapter. Prefer a stable <code>/dev/serial/by-id/...</code> path. If only <code>/dev/ttyUSB0</code> appears, pass that to the launch script.</p>
+      <pre><code>bash scripts/list_serial.sh
+bash scripts/run_lidar.sh /dev/ttyUSB0</code></pre>
+      <pre><code>ros2 topic echo /scan
+ros2 topic echo /rudra/obstacle_guard</code></pre>
+      <p>Default tuning lives in <code>src/rudra_base_bridge/config/rudra_v4_hardware.yaml</code>.</p>
+      <pre><code>obstacle_avoidance_enabled: true
+scan_topic: "/scan"
+obstacle_front_angle_deg: 70.0
+obstacle_stop_distance_m: 0.45
+obstacle_slow_distance_m: 1.00</code></pre>
+    </section>
+
+    <section>
       <h2>Verify With Terminals</h2>
       <p>Open new SSH terminals, source the workspace, and watch these topics.</p>
       <pre><code>cd /home/rudra/Projects/RUDRAv4
@@ -210,6 +234,7 @@ source install/setup.bash
 ros2 topic echo /rudra/ps2_raw</code></pre>
       <pre><code>ros2 topic echo /rudra/drive_cmd</code></pre>
       <pre><code>ros2 topic echo /rudra/teensy_ack</code></pre>
+      <pre><code>ros2 topic echo /rudra/obstacle_guard</code></pre>
       <div class="callout ok">
         Healthy manual drive looks like <code>J,1,...</code>, then nonzero <code>D,left,right,1</code> when a stick moves, and matching <code>ACK,left,right,1</code> from the Teensy.
       </div>

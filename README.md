@@ -79,7 +79,58 @@ Useful monitors:
 ros2 topic echo /rudra/ps2_raw
 ros2 topic echo /rudra/drive_cmd
 ros2 topic echo /rudra/teensy_ack
+ros2 topic echo /rudra/obstacle_guard
 ros2 topic echo /cmd_vel
+```
+
+## LiDAR obstacle guard
+
+Both bridge nodes subscribe to `/scan`, matching the RUDRAv3 navigation
+LaserScan convention. Forward motion is scaled down when an obstacle is inside
+the configured front cone and is blocked inside the stop distance. Reverse and
+turn-in-place commands remain available so the rover can back out or rotate.
+
+RUDRAv4 expects the Slamtec ROS2 driver package, `sllidar_ros2`, to publish
+that `/scan` topic. If it is not present in `ros2 pkg list`, add it to the
+workspace before building:
+
+```bash
+cd /home/rudra/Projects/RUDRAv4/src
+git clone https://github.com/Slamtec/sllidar_ros2.git
+cd /home/rudra/Projects/RUDRAv4
+colcon build
+source install/setup.bash
+```
+
+Find the LiDAR USB port:
+
+```bash
+bash scripts/list_serial.sh
+```
+
+Prefer the stable `/dev/serial/by-id/...` path for the LiDAR adapter. If only
+`/dev/ttyUSB0` appears, use that until a udev rule or by-id path is available.
+
+Run the LiDAR driver:
+
+```bash
+bash scripts/run_lidar.sh /dev/ttyUSB0
+```
+
+For an RPLIDAR A1, the default serial baudrate is `115200` and the scan frame
+is `laser`. The launch file publishes the standard LaserScan topic consumed by
+the obstacle guard.
+
+Tune these parameters in
+`src/rudra_base_bridge/config/rudra_v4_hardware.yaml` for both
+`ps2_uno_to_teensy` and `cmd_vel_to_teensy`:
+
+```yaml
+obstacle_avoidance_enabled: true
+scan_topic: "/scan"
+obstacle_front_angle_deg: 70.0
+obstacle_stop_distance_m: 0.45
+obstacle_slow_distance_m: 1.00
 ```
 
 ## Run normal `/cmd_vel` bridge

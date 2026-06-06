@@ -5,12 +5,13 @@ from __future__ import annotations
 import time
 from typing import Optional, Tuple
 
-import rclpy
 from geometry_msgs.msg import Twist
+import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from .serial_utils import LineSerial, apply_deadband, clamp, clamp_int
+from .obstacle_guard import LidarObstacleGuard
+from .serial_utils import apply_deadband, clamp, clamp_int, LineSerial
 
 
 class Ps2UnoToTeensy(Node):
@@ -53,6 +54,7 @@ class Ps2UnoToTeensy(Node):
 
         self.uno = LineSerial(self.uno_port, self.baud)
         self.teensy = LineSerial(self.teensy_port, self.baud)
+        self.obstacle_guard = LidarObstacleGuard(self)
 
         self.raw_pub = self.create_publisher(String, '/rudra/ps2_raw', 10)
         self.drive_pub = self.create_publisher(String, '/rudra/drive_cmd', 10)
@@ -119,7 +121,8 @@ class Ps2UnoToTeensy(Node):
             normalized_throttle = clamp(throttle / float(self.max_sabertooth_cmd), -1.0, 1.0)
             normalized_steering = clamp(steering / float(self.max_sabertooth_cmd), -1.0, 1.0)
             msg.linear.x = normalized_throttle * self.max_linear_speed_mps
-            # Positive angular.z should correspond to left turn; tune sign in config/node if needed.
+            # Positive angular.z should correspond to left turn.
+            # Tune sign in config/node if needed.
             msg.angular.z = normalized_steering * self.max_angular_speed_radps
         self.cmd_vel_pub.publish(msg)
 
@@ -137,7 +140,7 @@ class Ps2UnoToTeensy(Node):
         if result.error == 'not_connected':
             self.send_stop()
         elif result.error:
-            self.get_logger().warn(f'Uno serial error: {result.error}')
+            self.get_logger().warning(f'Uno serial error: {result.error}')
             self.send_stop()
 
         if result.line:
@@ -146,6 +149,14 @@ class Ps2UnoToTeensy(Node):
             if parsed is not None:
                 select, ry, rx, ly, lx = parsed
                 left, right, enable, throttle, steering = self.mix_drive(select, rx, ly)
+                if enable:
+                    left, right = self.obstacle_guard.filter_tank(
+                        left,
+                        right,
+                        self.max_sabertooth_cmd,
+                    )
+                    throttle = int(round((left + right) / 2.0))
+                    steering = int(round((right - left) / 2.0))
                 drive_line = f'D,{left},{right},{1 if enable else 0}'
                 self.teensy.write_line(drive_line)
                 self.drive_pub.publish(String(data=drive_line))

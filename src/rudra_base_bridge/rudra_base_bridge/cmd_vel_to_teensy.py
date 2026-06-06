@@ -5,12 +5,13 @@ from __future__ import annotations
 import time
 from typing import Optional
 
-import rclpy
 from geometry_msgs.msg import Twist
+import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from .serial_utils import LineSerial, clamp, clamp_int
+from .obstacle_guard import LidarObstacleGuard
+from .serial_utils import clamp, clamp_int, LineSerial
 
 
 class CmdVelToTeensy(Node):
@@ -39,6 +40,7 @@ class CmdVelToTeensy(Node):
         self.enable_on_nonzero_cmd = bool(self.get_parameter('enable_on_nonzero_cmd').value)
 
         self.teensy = LineSerial(self.teensy_port, self.baud)
+        self.obstacle_guard = LidarObstacleGuard(self)
         self.last_cmd_time = 0.0
         self.last_cmd = Twist()
         self.last_sent_stop = 0.0
@@ -58,7 +60,7 @@ class CmdVelToTeensy(Node):
         self.last_cmd_time = time.monotonic()
 
     def cmd_to_sabertooth(self, msg: Twist) -> tuple[int, int, bool]:
-        v = msg.linear.x
+        v = self.obstacle_guard.filter_linear_x(msg.linear.x)
         wz = msg.angular.z
 
         left_mps = v - wz * (self.wheelbase_m / 2.0)
@@ -67,8 +69,16 @@ class CmdVelToTeensy(Node):
         left_norm = clamp(left_mps / self.max_linear_speed_mps, -1.0, 1.0)
         right_norm = clamp(right_mps / self.max_linear_speed_mps, -1.0, 1.0)
 
-        left = clamp_int(round(left_norm * self.max_sabertooth_cmd), -self.max_sabertooth_cmd, self.max_sabertooth_cmd)
-        right = clamp_int(round(right_norm * self.max_sabertooth_cmd), -self.max_sabertooth_cmd, self.max_sabertooth_cmd)
+        left = clamp_int(
+            round(left_norm * self.max_sabertooth_cmd),
+            -self.max_sabertooth_cmd,
+            self.max_sabertooth_cmd,
+        )
+        right = clamp_int(
+            round(right_norm * self.max_sabertooth_cmd),
+            -self.max_sabertooth_cmd,
+            self.max_sabertooth_cmd,
+        )
 
         enable = True
         if self.enable_on_nonzero_cmd:
