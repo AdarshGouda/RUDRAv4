@@ -22,6 +22,8 @@ const uint32_t CMD_BAUD = 115200;
 const uint32_t SABER_BAUD = 9600;
 const uint32_t CONTROL_PERIOD_MS = 20;
 const uint32_t COMMAND_TIMEOUT_MS = 300;
+const uint32_t HEARTBEAT_PERIOD_MS = 500;
+const uint32_t HEARTBEAT_ON_MS = 100;
 
 const int MAX_CMD = 127;
 const int RAMP_STEP = 6;
@@ -36,6 +38,9 @@ bool driveEnabled = false;
 
 uint32_t lastCommandMs = 0;
 uint32_t lastControlMs = 0;
+uint32_t lastHeartbeatMs = 0;
+
+const int HEARTBEAT_LED_PIN = LED_BUILTIN;
 
 int clampInt(int value, int low, int high) {
   if (value < low) return low;
@@ -135,6 +140,9 @@ void readUsbCommands() {
 }
 
 void setup() {
+  pinMode(HEARTBEAT_LED_PIN, OUTPUT);
+  digitalWrite(HEARTBEAT_LED_PIN, LOW);
+
   Serial.begin(CMD_BAUD);
   Serial1.begin(SABER_BAUD);
 
@@ -151,9 +159,17 @@ void setup() {
 }
 
 void loop() {
-  readUsbCommands();
-
   uint32_t now = millis();
+
+  // Blink the built-in LED twice per second: 100 ms on, 400 ms off.
+  if ((now - lastHeartbeatMs) >= HEARTBEAT_PERIOD_MS) {
+    lastHeartbeatMs = now;
+    digitalWrite(HEARTBEAT_LED_PIN, HIGH);
+  } else if ((now - lastHeartbeatMs) >= HEARTBEAT_ON_MS) {
+    digitalWrite(HEARTBEAT_LED_PIN, LOW);
+  }
+
+  readUsbCommands();
 
   if ((now - lastCommandMs) > COMMAND_TIMEOUT_MS) {
     driveEnabled = false;

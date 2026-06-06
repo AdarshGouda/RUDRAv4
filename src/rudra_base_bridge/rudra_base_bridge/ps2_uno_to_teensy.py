@@ -10,7 +10,7 @@ from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from std_msgs.msg import String
 
-from .serial_utils import LineSerial, apply_deadband, clamp, clamp_int, map_range
+from .serial_utils import LineSerial, apply_deadband, clamp, clamp_int
 
 
 class Ps2UnoToTeensy(Node):
@@ -19,16 +19,19 @@ class Ps2UnoToTeensy(Node):
     def __init__(self) -> None:
         super().__init__('ps2_uno_to_teensy')
 
-        self.declare_parameter('uno_port', '/dev/serial/by-id/REPLACE_WITH_UNO_PORT')
-        self.declare_parameter('teensy_port', '/dev/serial/by-id/REPLACE_WITH_TEENSY_PORT')
+        uno_port = '/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_959313232323510182C0-if00'
+        teensy_port = '/dev/serial/by-id/usb-Teensyduino_USB_Serial_9210670-if00'
+
+        self.declare_parameter('uno_port', uno_port)
+        self.declare_parameter('teensy_port', teensy_port)
         self.declare_parameter('baud', 115200)
         self.declare_parameter('timer_period_sec', 0.02)
         self.declare_parameter('command_timeout_sec', 0.30)
         self.declare_parameter('publish_cmd_vel', True)
         self.declare_parameter('select_as_enable', True)
-        self.declare_parameter('axis_min', 0)
-        self.declare_parameter('axis_max', 225)
-        self.declare_parameter('deadband', 5)
+        self.declare_parameter('axis_center', 127)
+        self.declare_parameter('axis_range', 127)
+        self.declare_parameter('deadband', 15)
         self.declare_parameter('max_sabertooth_cmd', 127)
         self.declare_parameter('max_linear_speed_mps', 1.20)
         self.declare_parameter('max_angular_speed_radps', 2.50)
@@ -40,8 +43,8 @@ class Ps2UnoToTeensy(Node):
         self.command_timeout_sec = float(self.get_parameter('command_timeout_sec').value)
         self.publish_cmd_vel_enabled = bool(self.get_parameter('publish_cmd_vel').value)
         self.select_as_enable = bool(self.get_parameter('select_as_enable').value)
-        self.axis_min = int(self.get_parameter('axis_min').value)
-        self.axis_max = int(self.get_parameter('axis_max').value)
+        self.axis_center = int(self.get_parameter('axis_center').value)
+        self.axis_range = max(1, int(self.get_parameter('axis_range').value))
         self.deadband = int(self.get_parameter('deadband').value)
         self.max_sabertooth_cmd = int(self.get_parameter('max_sabertooth_cmd').value)
         self.max_linear_speed_mps = float(self.get_parameter('max_linear_speed_mps').value)
@@ -85,16 +88,19 @@ class Ps2UnoToTeensy(Node):
             return None
         return select, ry, rx, ly, lx
 
+    def axis_to_command(self, value: int, invert: bool = False) -> int:
+        centered = value - self.axis_center
+        if invert:
+            centered = -centered
+        scaled = int(round((centered / float(self.axis_range)) * self.max_sabertooth_cmd))
+        return apply_deadband(
+            clamp_int(scaled, -self.max_sabertooth_cmd, self.max_sabertooth_cmd),
+            self.deadband,
+        )
+
     def mix_drive(self, select: bool, rx: int, ly: int) -> Tuple[int, int, bool, int, int]:
-        # RUDRAv3 manual mapping preserved:
-        # throttle = map(Ly, 0, 225, 127, -127)
-        # steering = map(Rx, 0, 225, 127, -127)
-        throttle = int(round(map_range(ly, self.axis_min, self.axis_max,
-                                       self.max_sabertooth_cmd, -self.max_sabertooth_cmd)))
-        steering = int(round(map_range(rx, self.axis_min, self.axis_max,
-                                       self.max_sabertooth_cmd, -self.max_sabertooth_cmd)))
-        throttle = apply_deadband(throttle, self.deadband)
-        steering = apply_deadband(steering, self.deadband)
+        throttle = self.axis_to_command(ly, invert=True)
+        steering = self.axis_to_command(rx, invert=True)
 
         left = throttle - steering
         right = throttle + steering

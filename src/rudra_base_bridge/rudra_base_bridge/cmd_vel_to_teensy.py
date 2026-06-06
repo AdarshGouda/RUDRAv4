@@ -19,7 +19,9 @@ class CmdVelToTeensy(Node):
     def __init__(self) -> None:
         super().__init__('cmd_vel_to_teensy')
 
-        self.declare_parameter('teensy_port', '/dev/serial/by-id/REPLACE_WITH_TEENSY_PORT')
+        teensy_port = '/dev/serial/by-id/usb-Teensyduino_USB_Serial_9210670-if00'
+
+        self.declare_parameter('teensy_port', teensy_port)
         self.declare_parameter('baud', 115200)
         self.declare_parameter('wheelbase_m', 0.29)
         self.declare_parameter('max_linear_speed_mps', 1.20)

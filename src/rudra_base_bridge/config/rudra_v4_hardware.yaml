@@ -1,8 +1,8 @@
 ps2_uno_to_teensy:
   ros__parameters:
     # Replace with actual persistent ports from: ls -l /dev/serial/by-id/
-    uno_port: "/dev/serial/by-id/REPLACE_WITH_UNO_PORT"
-    teensy_port: "/dev/serial/by-id/REPLACE_WITH_TEENSY_PORT"
+    uno_port: "/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_959313232323510182C0-if00"
+    teensy_port: "/dev/serial/by-id/usb-Teensyduino_USB_Serial_9210670-if00"
 
     baud: 115200
     timer_period_sec: 0.02
@@ -10,9 +10,9 @@ ps2_uno_to_teensy:
 
     # RUDRAv3 PS2 behavior
     select_as_enable: true
-    axis_min: 0
-    axis_max: 225
-    deadband: 5
+    axis_center: 127
+    axis_range: 127
+    deadband: 15
     max_sabertooth_cmd: 127
 
     # Published /cmd_vel preview for ROS2 integration
@@ -23,7 +23,7 @@ ps2_uno_to_teensy:
 
 cmd_vel_to_teensy:
   ros__parameters:
-    teensy_port: "/dev/serial/by-id/REPLACE_WITH_TEENSY_PORT"
+    teensy_port: "/dev/serial/by-id/usb-Teensyduino_USB_Serial_9210670-if00"
     baud: 115200
     wheelbase_m: 0.29
     max_linear_speed_mps: 1.20

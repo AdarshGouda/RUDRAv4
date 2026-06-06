@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RUDRAv4 Startup and Headless Bringup</title>
+  <style>
+    :root {
+      --bg: #f6f2ea;
+      --ink: #18211f;
+      --muted: #5b6763;
+      --line: #d8d0c3;
+      --panel: #fffaf0;
+      --accent: #0f766e;
+      --warn: #a33b20;
+      --code: #10201d;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: linear-gradient(180deg, #faf7f0 0%, var(--bg) 42%, #eee7da 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 48px 22px 72px;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 28px;
+      padding-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0 0 10px;
+      font-size: clamp(2rem, 5vw, 4rem);
+      line-height: 1;
+    }
+
+    h2 {
+      margin: 34px 0 12px;
+      font-size: 1.4rem;
+    }
+
+    h3 {
+      margin: 22px 0 10px;
+      font-size: 1.08rem;
+    }
+
+    p {
+      max-width: 78ch;
+      margin: 0 0 14px;
+    }
+
+    .lede {
+      color: var(--muted);
+      font-size: 1.08rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 14px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .callout {
+      border-left: 5px solid var(--warn);
+      background: #fff3ea;
+      padding: 14px 16px;
+      margin: 18px 0;
+    }
+
+    .ok {
+      border-left-color: var(--accent);
+      background: #eefaf6;
+    }
+
+    code {
+      background: #ede6d8;
+      border-radius: 5px;
+      padding: 0.1rem 0.32rem;
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 18px;
+      padding: 14px 16px;
+      color: #d7fff2;
+      background: var(--code);
+      border-radius: 8px;
+      line-height: 1.45;
+    }
+
+    pre code {
+      background: transparent;
+      padding: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 22px;
+      background: rgba(255, 250, 240, 0.72);
+    }
+
+    th, td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #ece4d5;
+    }
+
+    ol, ul {
+      padding-left: 1.25rem;
+    }
+
+    li {
+      margin: 0.35rem 0;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>RUDRAv4 Startup</h1>
+      <p class="lede">Field bringup guide for launching the NUC, Uno PS2 bridge, Teensy, and Sabertooth drive chain.</p>
+    </header>
+
+    <section>
+      <h2>Normal Manual Drive Chain</h2>
+      <div class="grid">
+        <div class="card"><strong>PS2 controller</strong><br>Paired receiver sends stick state to the Uno.</div>
+        <div class="card"><strong>Arduino Uno</strong><br>USB serial line: <code>J,select,ry,rx,ly,lx</code>.</div>
+        <div class="card"><strong>NUC ROS2 bridge</strong><br>Publishes raw values and sends drive lines to Teensy.</div>
+        <div class="card"><strong>Teensy</strong><br>USB serial input: <code>D,left,right,enable</code>. Responds with <code>ACK,...</code>.</div>
+        <div class="card"><strong>Sabertooth drivers</strong><br>Packet serial from Teensy <code>Serial1/TX1</code> at 9600 baud.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Before Battery Power</h2>
+      <div class="callout">
+        Put the wheels off the ground for the first powered test. Keep one hand ready to remove battery power. Close Arduino Serial Monitor before starting ROS, because it can hold the Uno or Teensy serial port.
+      </div>
+      <ol>
+        <li>Confirm the PS2 receiver is paired and the Uno serial monitor previously showed changing <code>J,...</code> values.</li>
+        <li>Confirm the Teensy onboard LED heartbeat is blinking twice per second.</li>
+        <li>Confirm the Teensy serial monitor previously showed <code>BOOT,RUDRA_TEENSY_SABERTOOTH_READY</code>.</li>
+        <li>Confirm no duplicate bridge is running: only one node should own the Teensy serial port.</li>
+      </ol>
+    </section>
+
+    <section>
+      <h2>Build and Source</h2>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+colcon build --packages-select rudra_base_bridge
+source install/setup.bash</code></pre>
+    </section>
+
+    <section>
+      <h2>Check Serial Devices</h2>
+      <pre><code>bash scripts/list_serial.sh</code></pre>
+      <p>The current expected persistent ports are:</p>
+      <table>
+        <thead>
+          <tr><th>Device</th><th>Path</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Uno</td><td><code>/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_959313232323510182C0-if00</code></td></tr>
+          <tr><td>Teensy</td><td><code>/dev/serial/by-id/usb-Teensyduino_USB_Serial_9210670-if00</code></td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Launch Manual PS2 Drive</h2>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_bridge.sh</code></pre>
+      <p>Press <code>SELECT</code> on the PS2 controller to enable manual mode. Sticks at rest should keep left and right commands at zero.</p>
+    </section>
+
+    <section>
+      <h2>Verify With Terminals</h2>
+      <p>Open new SSH terminals, source the workspace, and watch these topics.</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+ros2 topic echo /rudra/ps2_raw</code></pre>
+      <pre><code>ros2 topic echo /rudra/drive_cmd</code></pre>
+      <pre><code>ros2 topic echo /rudra/teensy_ack</code></pre>
+      <div class="callout ok">
+        Healthy manual drive looks like <code>J,1,...</code>, then nonzero <code>D,left,right,1</code> when a stick moves, and matching <code>ACK,left,right,1</code> from the Teensy.
+      </div>
+    </section>
+
+    <section>
+      <h2>Teensy Only Test</h2>
+      <p>Use this when you want to test NUC to Teensy to Sabertooth without the Uno or PS2 controller.</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+bash scripts/run_cmd_vel_bridge.sh</code></pre>
+      <pre><code>ros2 topic pub --rate 20 /cmd_vel geometry_msgs/msg/Twist "{linear: {x: 0.2}, angular: {z: 0.0}}"</code></pre>
+      <p>Expected topics:</p>
+      <pre><code>/rudra/drive_cmd  -> data: D,21,21,1
+/rudra/teensy_ack -> data: ACK,21,21,1</code></pre>
+    </section>
+
+    <section>
+      <h2>Headless Checks</h2>
+      <p>Without a monitor, use SSH from another machine on the same network.</p>
+      <pre><code>ssh rudra@rudra.local</code></pre>
+      <p>If mDNS is unavailable, use the NUC IP address instead.</p>
+      <pre><code>ping rudra.local
+ssh rudra@&lt;NUC_IP_ADDRESS&gt;</code></pre>
+      <p>Once connected, these commands tell you whether RUDRA is launched:</p>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash
+ros2 node list
+ros2 topic list
+ros2 topic echo --once /rudra/drive_cmd
+ros2 topic echo --once /rudra/teensy_ack</code></pre>
+      <table>
+        <thead>
+          <tr><th>Signal</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Teensy LED blinking</td><td>New Teensy firmware is running.</td></tr>
+          <tr><td><code>/ps2_uno_to_teensy</code> in <code>ros2 node list</code></td><td>Manual drive bridge is launched.</td></tr>
+          <tr><td><code>/rudra/ps2_raw</code> changing</td><td>Uno and PS2 are reaching ROS.</td></tr>
+          <tr><td><code>/rudra/teensy_ack</code> printing</td><td>Teensy is receiving and replying to commands.</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section>
+      <h2>Launch on NUC Boot</h2>
+      <p>Yes, RUDRA can launch automatically when the NUC boots. A systemd service is the cleanest approach.</p>
+      <h3>Create the service</h3>
+      <pre><code>sudo nano /etc/systemd/system/rudra-ps2-bridge.service</code></pre>
+      <p>Paste this service:</p>
+      <pre><code>[Unit]
+Description=RUDRAv4 PS2 to Teensy bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=rudra
+WorkingDirectory=/home/rudra/Projects/RUDRAv4
+ExecStartPre=/bin/sleep 5
+ExecStart=/bin/bash -lc 'source /opt/ros/lyrical/setup.bash &amp;&amp; source /home/rudra/Projects/RUDRAv4/install/setup.bash &amp;&amp; ros2 launch rudra_base_bridge ps2_to_teensy.launch.py config:=/home/rudra/Projects/RUDRAv4/src/rudra_base_bridge/config/rudra_v4_hardware.yaml'
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target</code></pre>
+      <h3>Enable and start</h3>
+      <pre><code>sudo systemctl daemon-reload
+sudo systemctl enable rudra-ps2-bridge.service
+sudo systemctl start rudra-ps2-bridge.service</code></pre>
+      <h3>Check status without a monitor</h3>
+      <pre><code>systemctl status rudra-ps2-bridge.service --no-pager
+journalctl -u rudra-ps2-bridge.service -f</code></pre>
+      <h3>Stop or disable autostart</h3>
+      <pre><code>sudo systemctl stop rudra-ps2-bridge.service
+sudo systemctl disable rudra-ps2-bridge.service</code></pre>
+    </section>
+
+    <section>
+      <h2>Shutdown</h2>
+      <ol>
+        <li>Release the sticks.</li>
+        <li>Press <code>SELECT</code> to disable manual mode if needed.</li>
+        <li>Stop the ROS launch or service.</li>
+        <li>Remove Sabertooth battery power.</li>
+        <li>Shut down the NUC cleanly.</li>
+      </ol>
+      <pre><code>sudo shutdown now</code></pre>
+    </section>
+  </main>
+</body>
+</html>
