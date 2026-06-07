@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RUDRAv4 Bring-Up Report</title>
+  <style>
+    :root {
+      --bg: #f5f7f4;
+      --ink: #16201c;
+      --muted: #52605a;
+      --line: #ccd8d1;
+      --panel: #ffffff;
+      --soft: #eaf1ed;
+      --accent: #0f766e;
+      --accent-2: #215e8f;
+      --warn: #a23d21;
+      --code: #0f1f1b;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background:
+        linear-gradient(145deg, rgba(15, 118, 110, 0.10), transparent 28rem),
+        linear-gradient(180deg, #fbfcfa 0%, var(--bg) 48%, #e9eee9 100%);
+      font-family: "Aptos", "Segoe UI", sans-serif;
+      line-height: 1.55;
+    }
+
+    main {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 42px 22px 76px;
+    }
+
+    header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: end;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 24px;
+      margin-bottom: 28px;
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: clamp(2.1rem, 5vw, 4.4rem);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    h2 {
+      margin: 36px 0 12px;
+      font-size: 1.45rem;
+    }
+
+    h3 {
+      margin: 22px 0 8px;
+      font-size: 1.08rem;
+    }
+
+    p {
+      max-width: 82ch;
+      margin: 0 0 14px;
+    }
+
+    a {
+      color: var(--accent-2);
+    }
+
+    .lede {
+      color: var(--muted);
+      font-size: 1.08rem;
+      max-width: 74ch;
+    }
+
+    .stamp {
+      min-width: 176px;
+      padding: 12px 14px;
+      border: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.76);
+      border-radius: 8px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 14px;
+      margin: 16px 0 20px;
+    }
+
+    .card {
+      min-height: 100%;
+      padding: 15px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .card strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .callout {
+      margin: 18px 0;
+      padding: 14px 16px;
+      border-left: 5px solid var(--accent);
+      background: #eef8f5;
+    }
+
+    .callout.warn {
+      border-left-color: var(--warn);
+      background: #fff1ec;
+    }
+
+    code {
+      padding: 0.1rem 0.32rem;
+      border-radius: 5px;
+      background: var(--soft);
+    }
+
+    pre {
+      overflow-x: auto;
+      margin: 12px 0 18px;
+      padding: 14px 16px;
+      color: #d9fff4;
+      background: var(--code);
+      border-radius: 8px;
+      line-height: 1.45;
+    }
+
+    pre code {
+      padding: 0;
+      background: transparent;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 22px;
+      background: rgba(255, 255, 255, 0.76);
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: #e4ede8;
+    }
+
+    ol,
+    ul {
+      padding-left: 1.25rem;
+    }
+
+    li {
+      margin: 0.35rem 0;
+    }
+
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 16px 0 20px;
+    }
+
+    .flow div {
+      min-height: 92px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+    }
+
+    .flow span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    @media (max-width: 720px) {
+      header {
+        grid-template-columns: 1fr;
+      }
+
+      .stamp {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>RUDRAv4 Bring-Up Report</h1>
+        <p class="lede">Living report for the practical setup details around the Teensy, Uno, PS2 controller, LiDAR driver, Sabertooth drive chain, and ROS2 Lyrical workspace.</p>
+      </div>
+      <div class="stamp">
+        Updated: 2026-06-06<br>
+        Branch: <code>lidar-obstacle-avoidance</code>
+      </div>
+    </header>
+
+    <section>
+      <h2>Workspace Layout</h2>
+      <p>Keep external drivers separate from the robot package. This keeps vendor code out of the RUDRAv4 source tree while still making drivers available through the ROS2 overlay chain.</p>
+      <table>
+        <thead>
+          <tr><th>Workspace</th><th>Purpose</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>/home/rudra/ros2_ws</code></td><td>External ROS2 hardware drivers such as <code>YDLidar-SDK</code>, <code>ydlidar_ros2_driver</code>, and legacy <code>sllidar_ros2</code>.</td></tr>
+          <tr><td><code>/home/rudra/Projects/RUDRAv4</code></td><td>Robot code, firmware examples, launch files, config, scripts, and project docs.</td></tr>
+        </tbody>
+      </table>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash</code></pre>
+    </section>
+
+    <section>
+      <h2>Hardware Chain</h2>
+      <div class="flow">
+        <div><strong>PS2 Controller</strong><span>Wireless input, SELECT enables manual drive.</span></div>
+        <div><strong>Arduino Uno</strong><span>Reads PS2 receiver and prints <code>J,select,ry,rx,ly,lx,x</code>.</span></div>
+        <div><strong>NUC ROS2</strong><span>Runs <code>rudra_base_bridge</code> and obstacle guard.</span></div>
+        <div><strong>Teensy 4.1</strong><span>Receives <code>D,left,right,enable</code>.</span></div>
+        <div><strong>Sabertooths</strong><span>Packet serial from Teensy <code>Serial1/TX1</code>.</span></div>
+        <div><strong>Motors</strong><span>Final rover drive output.</span></div>
+      </div>
+      <p>LiDAR is a separate USB device. Its only contract with the obstacle guard is to publish <code>sensor_msgs/msg/LaserScan</code> on <code>/scan</code>.</p>
+    </section>
+
+    <section>
+      <h2>Observed Serial Map</h2>
+      <p>The observed ports on 2026-06-06 were:</p>
+      <table>
+        <thead>
+          <tr><th>Device</th><th>Stable Path</th><th>Short Path</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Arduino Uno</td><td><code>/dev/serial/by-id/usb-Arduino__www.arduino.cc__0043_959313232323510182C0-if00</code></td><td><code>/dev/ttyACM1</code></td></tr>
+          <tr><td>Teensy</td><td><code>/dev/serial/by-id/usb-Teensyduino_USB_Serial_9210670-if00</code></td><td><code>/dev/ttyACM0</code></td></tr>
+          <tr><td>LiDAR USB adapter</td><td><code>/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0</code></td><td><code>/dev/ttyUSB0</code></td></tr>
+        </tbody>
+      </table>
+      <pre><code>bash scripts/list_serial.sh</code></pre>
+      <div class="callout">Prefer <code>/dev/serial/by-id/...</code> in config and launch commands. Short paths can change after reboot or replugging.</div>
+    </section>
+
+    <section>
+      <h2>Firmware Roles</h2>
+      <div class="grid">
+        <div class="card">
+          <strong>Uno</strong>
+          Sends one line per controller packet:
+          <pre><code>J,select,ry,rx,ly,lx,x</code></pre>
+          The seventh <code>x</code> field is the momentary X/CROSS button.
+        </div>
+        <div class="card">
+          <strong>Teensy</strong>
+          Receives drive lines:
+          <pre><code>D,left,right,enable</code></pre>
+        </div>
+        <div class="card">
+          <strong>Sabertooth Chain</strong>
+          Right address <code>128</code>, left address <code>129</code>, Teensy <code>Serial1/TX1</code>, <code>9600</code> baud.
+        </div>
+      </div>
+      <p>Do not reflash automatically just because the branch changed. Reflash the Uno when you need the newer <code>J,select,ry,rx,ly,lx,x</code> packet for X-button obstacle guard toggling, or if it is not sending <code>J,...</code>. Reflash the Teensy only if it is not accepting <code>D,...</code>.</p>
+      <pre><code>src/rudra_base_bridge/firmware/uno_ps2_plain_serial/uno_ps2_plain_serial.ino
+src/rudra_base_bridge/firmware/teensy_sabertooth_serial_controller/teensy_sabertooth_serial_controller.ino</code></pre>
+    </section>
+
+    <section>
+      <h2>PS2 Manual Drive</h2>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+colcon build --packages-select rudra_base_bridge
+source install/setup.bash
+bash scripts/run_ps2_bridge.sh</code></pre>
+      <table>
+        <thead>
+          <tr><th>Input</th><th>Behavior</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>SELECT</code></td><td>Enables manual drive when <code>select_as_enable</code> is true.</td></tr>
+          <tr><td><code>Ly</code></td><td>Throttle.</td></tr>
+          <tr><td><code>Rx</code></td><td>Steering.</td></tr>
+          <tr><td>Mixer</td><td><code>left = throttle - steering</code>, <code>right = throttle + steering</code>.</td></tr>
+        </tbody>
+      </table>
+      <pre><code>ros2 topic echo /rudra/ps2_raw
+ros2 topic echo /rudra/drive_cmd
+ros2 topic echo /rudra/teensy_ack
+ros2 topic echo /cmd_vel</code></pre>
+      <div class="callout warn">Do not run <code>ps2_uno_to_teensy</code> and <code>cmd_vel_to_teensy</code> at the same time. Both try to own the Teensy serial port.</div>
+    </section>
+
+    <section>
+      <h2><code>/cmd_vel</code> Drive</h2>
+      <p>Use this path for keyboard teleop, joystick teleop, SLAM, or Nav2 when the PS2 bridge is not running.</p>
+      <pre><code>bash scripts/run_cmd_vel_bridge.sh</code></pre>
+      <p>Test with wheels lifted:</p>
+      <pre><code>ros2 topic pub --rate 20 /cmd_vel geometry_msgs/msg/Twist \
+  "{linear: {x: 0.2}, angular: {z: 0.0}}"</code></pre>
+    </section>
+
+    <section>
+      <h2>LiDAR Driver Choice</h2>
+      <p>The current RUDRAv4 <code>lidar.launch.py</code> starts <code>ydlidar_ros2_driver</code>. That is the correct default for this rover.</p>
+      <p>On 2026-06-06 the direct USB LiDAR identified as <code>YDLIDAR G2B</code>, firmware <code>3.5</code>, hardware <code>3</code>, model code <code>15</code>, serial <code>2022021500070129</code>. It answered at <code>/dev/ttyUSB0:128000</code> and published <code>/scan</code>.</p>
+      <table>
+        <thead>
+          <tr><th>Physical Unit</th><th>Driver</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>RUDRAv4 current unit: YDLIDAR G2B</td><td><code>YDLidar-SDK</code> plus <code>ydlidar_ros2_driver</code></td></tr>
+          <tr><td>Slamtec / RPLIDAR</td><td><code>sllidar_ros2</code>, launched through <code>sllidar.launch.py</code></td></tr>
+          <tr><td>Unknown</td><td>Read the model label before changing code or wiring.</td></tr>
+        </tbody>
+      </table>
+      <div class="callout warn">A direct USB LiDAR that worked on RUDRAv3 and times out with every Slamtec baud was a driver/protocol mismatch in this bringup, not a wiring issue.</div>
+    </section>
+
+    <section>
+      <h2>LiDAR Findings</h2>
+      <p>Observed on 2026-06-06:</p>
+      <pre><code>sllidar_ros2 built and launched.
+/dev/ttyUSB0 was a Silicon Labs CP2102 adapter.
+sllidar_ros2 timed out at getDeviceInfo().
+A direct Slamtec device-info probe returned no response at:
+  115200
+  256000
+  460800
+  1000000</code></pre>
+      <p>That result means the Slamtec driver opened the serial port but did not receive a valid Slamtec device-info reply.</p>
+      <p>The YDLIDAR path succeeded:</p>
+      <pre><code>Lidar successfully connected [/dev/ttyUSB0:128000]
+Model: G2B
+Firmware version: 3.5
+Hardware version: 3
+Serial: 2022021500070129
+Sample Rate: 5.00K
+/scan published sensor_msgs/msg/LaserScan with frame_id: laser</code></pre>
+      <div class="callout warn">The driver still prints startup checksum warnings and repeated <code>Real points &gt; fixed points 530</code> warnings with the current fixed-resolution config. A temporary <code>fixed_resolution: false</code> test also published <code>/scan</code>, but changed scan timing and produced more startup checksum noise, so the default config remains the safer known-good baseline.</div>
+      <div class="callout">In script testing, the first <code>/scan</code> echo sometimes needed roughly 15 seconds after launch because the driver connects, starts the motor, syncs packets, and then begins publishing. Do not assume failure immediately after the first startup warnings.</div>
+    </section>
+
+    <section>
+      <h2>YDLIDAR Driver Patch</h2>
+      <p>The YDLIDAR driver lives outside the robot repo in <code>/home/rudra/ros2_ws</code>. The SDK was installed locally under <code>/home/rudra/ros2_ws/install/YDLidar-SDK</code> instead of system-wide.</p>
+      <pre><code>cd /home/rudra/ros2_ws
+source /opt/ros/lyrical/setup.bash
+export CMAKE_PREFIX_PATH=/home/rudra/ros2_ws/install/YDLidar-SDK:$CMAKE_PREFIX_PATH
+colcon build --symlink-install --packages-select ydlidar_ros2_driver</code></pre>
+      <p>Compatibility changes made for ROS2 Lyrical and the local CMake version:</p>
+      <ul>
+        <li><code>YDLidar-SDK</code> CMake policies were modernized enough to configure under current CMake.</li>
+        <li>The SDK install step was changed to install targets directly, avoiding old build-tree <code>LOCATION</code> behavior.</li>
+        <li><code>ydlidar_ros2_driver</code> links imported ROS targets instead of relying on unavailable <code>ament_target_dependencies()</code>.</li>
+        <li>The driver node declares parameters with defaults, which Lyrical requires before reading YAML values.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Slamtec Driver Patch</h2>
+      <p>On ROS2 Lyrical, upstream <code>sllidar_ros2</code> called the old <code>ament_target_dependencies()</code> CMake macro. On this machine, the installed ament packages did not provide that macro file. The compatibility patch in <code>~/ros2_ws/src/sllidar_ros2/CMakeLists.txt</code> used imported targets:</p>
+      <pre><code>target_link_libraries(sllidar_node
+  rclcpp::rclcpp
+  std_srvs::std_srvs
+  sensor_msgs::sensor_msgs
+)
+
+target_link_libraries(sllidar_client
+  rclcpp::rclcpp
+  std_srvs::std_srvs
+  sensor_msgs::sensor_msgs
+)</code></pre>
+      <pre><code>cd /home/rudra/ros2_ws
+source /opt/ros/lyrical/setup.bash
+colcon build --symlink-install --allow-overriding sllidar_ros2</code></pre>
+    </section>
+
+    <section>
+      <h2>LiDAR Launch</h2>
+      <p>Current default YDLIDAR launch path:</p>
+      <pre><code>bash scripts/run_lidar.sh \
+  /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0</code></pre>
+      <p>Open RViz to see the scan and obstacle guard marker:</p>
+      <pre><code>bash scripts/view_lidar.sh</code></pre>
+      <p>RViz uses <code>laser</code> as the fixed frame, shows <code>/scan</code> as green points, and shows <code>/rudra/obstacle_guard_marker</code> as the guard's current closest front-cone obstacle. Marker colors: green clear, orange slowing, red blocked, gray disabled.</p>
+      <p>Stop the driver and request motor stop:</p>
+      <pre><code>bash scripts/stop_lidar.sh</code></pre>
+      <p>If a YDLIDAR node is running, the driver also exposes services:</p>
+      <pre><code>ros2 service call /stop_scan std_srvs/srv/Empty "{}"
+ros2 service call /start_scan std_srvs/srv/Empty "{}"</code></pre>
+      <p>Equivalent direct launch:</p>
+      <pre><code>ros2 launch rudra_base_bridge lidar.launch.py \
+  serial_port:=/dev/ttyUSB0</code></pre>
+      <p>Config file:</p>
+      <pre><code>src/rudra_base_bridge/config/ydlidar_g2b.yaml
+baudrate: 128000
+sample_rate: 5
+frequency: 10.0
+frame_id: laser</code></pre>
+      <p>Legacy Slamtec/RPLIDAR launch path:</p>
+      <pre><code>ros2 launch rudra_base_bridge sllidar.launch.py \
+  serial_port:=/dev/ttyUSB0 \
+  serial_baudrate:=115200 \
+  scan_mode:=Sensitivity</code></pre>
+      <pre><code>ros2 topic echo /scan
+ros2 topic echo /rudra/obstacle_guard</code></pre>
+    </section>
+
+    <section>
+      <h2>Obstacle Guard</h2>
+      <p>Both drive bridges create a <code>LidarObstacleGuard</code>. It subscribes to <code>/scan</code>, listens for runtime enable/disable commands on <code>/rudra/obstacle_guard_enable</code>, and publishes guard status on <code>/rudra/obstacle_guard</code>.</p>
+      <p>Keep the LiDAR driver and the obstacle guard conceptually separate. The LiDAR can keep publishing <code>/scan</code> for SLAM/Nav while the low-level drive filter is disabled for manual testing.</p>
+      <pre><code>obstacle_avoidance_enabled: true
+obstacle_enable_topic: "/rudra/obstacle_guard_enable"
+scan_topic: "/scan"
+obstacle_front_angle_deg: 70.0
+obstacle_stop_distance_m: 0.45
+obstacle_slow_distance_m: 1.00
+obstacle_scan_timeout_sec: 0.75
+obstacle_status_period_sec: 0.25</code></pre>
+      <p>Runtime topic control:</p>
+      <pre><code>ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: true}"</code></pre>
+      <p>PS2 X-button control:</p>
+      <pre><code>Press X while the rover is stopped to toggle obstacle avoidance.
+Requires updated Uno firmware publishing: J,select,ry,rx,ly,lx,x</code></pre>
+      <p>PS2 tuning:</p>
+      <pre><code>ps2_obstacle_x_toggle_enabled: true
+ps2_obstacle_x_toggle_require_stopped: true
+ps2_obstacle_control_enabled: false
+ps2_obstacle_control_hold_sec: 0.80
+ps2_obstacle_control_threshold: 90
+ps2_obstacle_control_require_stopped: true</code></pre>
+      <table>
+        <thead>
+          <tr><th>Status</th><th>Meaning</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>no_fresh_scan</code></td><td>No recent scan. Forward commands pass through.</td></tr>
+          <tr><td><code>clear</code></td><td>Front cone is clear. Forward commands pass through.</td></tr>
+          <tr><td><code>slowing</code></td><td>Obstacle is between slow and stop distance. Forward command is scaled down.</td></tr>
+          <tr><td><code>blocked</code></td><td>Obstacle is inside stop distance. Forward command is blocked.</td></tr>
+          <tr><td><code>reverse_or_turn</code></td><td>Reverse and turn-in-place remain available.</td></tr>
+        </tbody>
+      </table>
+      <p>To temporarily get old PS2 behavior, set <code>obstacle_avoidance_enabled: false</code> in both sections of <code>src/rudra_base_bridge/config/rudra_v4_hardware.yaml</code>.</p>
+      <div class="callout warn">Disabling the obstacle guard does not necessarily stop the physical LiDAR from spinning. Some direct USB YDLIDAR units spin whenever powered. The runtime guard control only changes whether scan data filters motor commands.</div>
+    </section>
+
+    <section>
+      <h2>Safety Rules</h2>
+      <ul>
+        <li>Lift wheels for the first motor test.</li>
+        <li>Keep battery power easy to remove.</li>
+        <li>Close Arduino Serial Monitor before launching ROS.</li>
+        <li>Launch only one node that owns the Teensy serial port.</li>
+        <li>Confirm <code>/rudra/drive_cmd</code> before placing the rover on the floor.</li>
+        <li>Start with low speed commands.</li>
+        <li>Do not enable Nav2/autonomy until <code>/scan</code>, TF, odom, and base control are boringly reliable.</li>
+      </ul>
+    </section>
+
+    <section>
+      <h2>Troubleshooting</h2>
+      <table>
+        <thead>
+          <tr><th>Symptom</th><th>Action</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>build: command not found</code></td><td>Use <code>colcon build</code>, not <code>build colcon</code>.</td></tr>
+          <tr><td><code>package 'sllidar_ros2' not found</code></td><td>Source the external driver workspace or build the correct LiDAR driver.</td></tr>
+          <tr><td><code>ament_target_dependencies</code> unknown</td><td>Patch <code>sllidar_ros2</code> CMake to link imported Lyrical targets.</td></tr>
+          <tr><td><code>SL_RESULT_OPERATION_TIMEOUT</code></td><td>The Slamtec driver opened the port but the LiDAR did not reply. If the hardware worked in RUDRAv3, suspect wrong driver/protocol.</td></tr>
+          <tr><td>No <code>/scan</code></td><td>Start the correct LiDAR driver first. The obstacle guard consumes <code>/scan</code>; it does not start the hardware driver.</td></tr>
+          <tr><td>PS2 bridge sends no motion</td><td>Check <code>/rudra/ps2_raw</code>, SELECT enable, <code>/rudra/drive_cmd</code>, and <code>/rudra/teensy_ack</code>.</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+</body>
+</html>

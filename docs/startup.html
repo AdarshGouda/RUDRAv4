@@ -143,13 +143,14 @@
     <header>
       <h1>RUDRAv4 Startup</h1>
       <p class="lede">Field bringup guide for launching the NUC, Uno PS2 bridge, Teensy, and Sabertooth drive chain.</p>
+      <p class="lede">For the full living setup report, including LiDAR driver findings and troubleshooting notes, open <a href="bringup-report.html">bringup-report.html</a>.</p>
     </header>
 
     <section>
       <h2>Normal Manual Drive Chain</h2>
       <div class="grid">
         <div class="card"><strong>PS2 controller</strong><br>Paired receiver sends stick state to the Uno.</div>
-        <div class="card"><strong>Arduino Uno</strong><br>USB serial line: <code>J,select,ry,rx,ly,lx</code>.</div>
+        <div class="card"><strong>Arduino Uno</strong><br>USB serial line: <code>J,select,ry,rx,ly,lx,x</code>.</div>
         <div class="card"><strong>NUC ROS2 bridge</strong><br>Publishes raw values and sends drive lines to Teensy.</div>
         <div class="card"><strong>Teensy</strong><br>USB serial input: <code>D,left,right,enable</code>. Responds with <code>ACK,...</code>.</div>
         <div class="card"><strong>Sabertooth drivers</strong><br>Packet serial from Teensy <code>Serial1/TX1</code> at 9600 baud.</div>
@@ -204,21 +205,32 @@ bash scripts/run_ps2_bridge.sh</code></pre>
     <section>
       <h2>LiDAR Obstacle Guard</h2>
       <p>The PS2 and <code>/cmd_vel</code> bridges subscribe to <code>/scan</code>. Forward drive slows inside the configured front cone and stops inside the stop distance. Reverse and turn-in-place commands remain available.</p>
-      <p>RUDRAv4 uses the Slamtec ROS2 driver package <code>sllidar_ros2</code>. RUDRAv3 had the RPLIDAR launch line commented out; in RUDRAv4 the launch entrypoint is explicit.</p>
-      <pre><code>ros2 pkg list | grep sllidar_ros2</code></pre>
-      <p>If the package is missing, add it to the workspace and rebuild.</p>
-      <pre><code>cd /home/rudra/Projects/RUDRAv4/src
-git clone https://github.com/Slamtec/sllidar_ros2.git
-cd /home/rudra/Projects/RUDRAv4
-colcon build
-source install/setup.bash</code></pre>
+      <p>The obstacle guard does not require a specific LiDAR brand. It requires a correct driver publishing <code>/scan</code>. This rover's direct USB unit was confirmed as <code>YDLIDAR G2B</code>, so the default RUDRAv4 launch uses <code>ydlidar_ros2_driver</code>. Use <code>sllidar_ros2</code> only for Slamtec/RPLIDAR hardware.</p>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash</code></pre>
       <p>Find the LiDAR USB adapter. Prefer a stable <code>/dev/serial/by-id/...</code> path. If only <code>/dev/ttyUSB0</code> appears, pass that to the launch script.</p>
       <pre><code>bash scripts/list_serial.sh
 bash scripts/run_lidar.sh /dev/ttyUSB0</code></pre>
+      <p>Open RViz to see what the LiDAR sees. The scan appears as green points in the <code>laser</code> frame. When the PS2 or <code>/cmd_vel</code> bridge is running, the obstacle guard marker shows the closest obstacle in the front cone.</p>
+      <pre><code>bash scripts/view_lidar.sh</code></pre>
+      <p>Stop the driver and request motor stop:</p>
+      <pre><code>bash scripts/stop_lidar.sh</code></pre>
       <pre><code>ros2 topic echo /scan
 ros2 topic echo /rudra/obstacle_guard</code></pre>
+      <p>Obstacle avoidance can be disabled without stopping the LiDAR driver. This keeps <code>/scan</code> available for future SLAM/Nav while bypassing the low-level forward-drive filter.</p>
+      <pre><code>ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: true}"</code></pre>
+      <p>From the PS2 controller, press <code>X</code> while stopped to toggle obstacle avoidance. This requires the updated Uno firmware that publishes the seventh <code>x</code> field.</p>
+      <div class="callout warn">
+        Disabling obstacle avoidance is not the same as stopping the LiDAR motor. If no ROS LiDAR process is running and the unit still spins, it is being powered directly by USB. Unplug the LiDAR USB cable or switch off its USB power/hub port.
+      </div>
+      <div class="callout">
+        If <code>sllidar_ros2</code> reports <code>SL_RESULT_OPERATION_TIMEOUT</code> on hardware that worked in RUDRAv3, check the LiDAR model before changing wiring. This robot uses a YDLIDAR-class unit, which needs the YDLIDAR driver stack.
+      </div>
       <p>Default tuning lives in <code>src/rudra_base_bridge/config/rudra_v4_hardware.yaml</code>.</p>
       <pre><code>obstacle_avoidance_enabled: true
+obstacle_enable_topic: "/rudra/obstacle_guard_enable"
 scan_topic: "/scan"
 obstacle_front_angle_deg: 70.0
 obstacle_stop_distance_m: 0.45

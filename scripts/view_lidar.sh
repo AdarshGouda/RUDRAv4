@@ -6,7 +6,4 @@ if [ -f /home/rudra/ros2_ws/install/setup.bash ]; then
   source /home/rudra/ros2_ws/install/setup.bash
 fi
 source install/setup.bash
-ros2 launch rudra_base_bridge lidar.launch.py \
-  serial_port:="${1:-/dev/ttyUSB0}" \
-  config:="${2:-$(pwd)/src/rudra_base_bridge/config/ydlidar_g2b.yaml}" \
-  frame_id:="${3:-laser}"
+ros2 launch rudra_base_bridge lidar_view.launch.py

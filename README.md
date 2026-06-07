@@ -6,7 +6,7 @@ RUDRAv4 is the ROS2 upgrade path for the RUDRA rover. The current base-control f
 PS2 wireless controller
   ↓
 Arduino Uno with PS2 receiver
-  ↓ USB serial: J,select,ry,rx,ly,lx
+  ↓ USB serial: J,select,ry,rx,ly,lx,x
 NUC rudra running ROS2 Lyrical
   ↓ USB serial: D,left,right,enable
 Teensy 4.1
@@ -73,6 +73,13 @@ For battery bringup and headless checks, open:
 docs/startup.html
 ```
 
+For the living setup report covering Uno, Teensy, Sabertooth, LiDAR, driver
+choice, troubleshooting, and the nuances learned during bringup, open:
+
+```text
+docs/bringup-report.html
+```
+
 Useful monitors:
 
 ```bash
@@ -90,16 +97,25 @@ LaserScan convention. Forward motion is scaled down when an obstacle is inside
 the configured front cone and is blocked inside the stop distance. Reverse and
 turn-in-place commands remain available so the rover can back out or rotate.
 
-RUDRAv4 expects the Slamtec ROS2 driver package, `sllidar_ros2`, to publish
-that `/scan` topic. If it is not present in `ros2 pkg list`, add it to the
-workspace before building:
+The obstacle guard only needs a valid `/scan`; the hardware driver must match
+the physical LiDAR. On 2026-06-06 this rover's direct USB LiDAR identified as
+`YDLIDAR G2B`, firmware `3.5`, model code `15`, serial `2022021500070129`.
+Use the YDLIDAR driver stack for this robot. Use `sllidar_ros2` only for
+Slamtec/RPLIDAR hardware.
+
+During bringup on 2026-06-06, `/dev/ttyUSB0` was the LiDAR's CP2102 USB
+adapter, but `sllidar_ros2` timed out on every common Slamtec baud. Since the
+same direct USB LiDAR worked on RUDRAv3 and RUDRAv3 docs mention a
+YDLIDAR-class unit, treat that as a driver/protocol mismatch before
+suspecting wiring.
+
+External LiDAR drivers live in `/home/rudra/ros2_ws`, then RUDRAv4 is sourced
+on top:
 
 ```bash
-cd /home/rudra/Projects/RUDRAv4/src
-git clone https://github.com/Slamtec/sllidar_ros2.git
-cd /home/rudra/Projects/RUDRAv4
-colcon build
-source install/setup.bash
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash
 ```
 
 Find the LiDAR USB port:
@@ -117,9 +133,43 @@ Run the LiDAR driver:
 bash scripts/run_lidar.sh /dev/ttyUSB0
 ```
 
-For an RPLIDAR A1, the default serial baudrate is `115200` and the scan frame
-is `laser`. The launch file publishes the standard LaserScan topic consumed by
-the obstacle guard.
+Open RViz to see the scan and obstacle guard marker:
+
+```bash
+bash scripts/view_lidar.sh
+```
+
+RViz displays `/scan` as green points in the `laser` frame. When a bridge node
+is running, `/rudra/obstacle_guard_marker` shows the closest front-cone
+obstacle used by the guard: green is clear, orange is slowing, red is blocked,
+and gray means the guard is disabled.
+
+The default RUDRAv4 LiDAR launch uses `ydlidar_ros2_driver` with
+`src/rudra_base_bridge/config/ydlidar_g2b.yaml`: `/dev/ttyUSB0`, `128000`
+baud, `sample_rate: 5`, `frequency: 10.0`, and scan frame `laser`. The legacy
+Slamtec launch is still available as `sllidar.launch.py`:
+
+```bash
+ros2 launch rudra_base_bridge sllidar.launch.py \
+  serial_port:=/dev/ttyUSB0 \
+  serial_baudrate:=115200 \
+  scan_mode:=Sensitivity
+```
+
+The spinning LiDAR and the obstacle guard are separate. Keep the driver
+publishing `/scan` for SLAM/Nav, and enable or disable only the low-level drive
+filter when needed:
+
+```bash
+ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: true}"
+ros2 topic echo /rudra/obstacle_guard
+```
+
+From the PS2 controller, press `X` while the rover is stopped to toggle
+obstacle avoidance. This requires the updated Uno firmware that publishes the
+seventh `x` field. It does not stop `/scan`; it only changes whether the guard
+filters forward motor commands.
 
 Tune these parameters in
 `src/rudra_base_bridge/config/rudra_v4_hardware.yaml` for both
@@ -127,6 +177,7 @@ Tune these parameters in
 
 ```yaml
 obstacle_avoidance_enabled: true
+obstacle_enable_topic: "/rudra/obstacle_guard_enable"
 scan_topic: "/scan"
 obstacle_front_angle_deg: 70.0
 obstacle_stop_distance_m: 0.45
@@ -157,8 +208,12 @@ These replace the old ROS1 `rosserial` path for ROS2 bringup. The Uno only publi
 Uno to NUC:
 
 ```text
-J,select,ry,rx,ly,lx
+J,select,ry,rx,ly,lx,x
 ```
+
+The ROS2 bridge also accepts the old six-field packet during transition, but
+the PS2 `X` toggle only works after reflashing the Uno with the updated
+firmware.
 
 NUC to Teensy:
 

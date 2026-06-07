@@ -21,16 +21,30 @@ ps2_uno_to_teensy:
     max_angular_speed_radps: 2.50
     send_stop_when_disabled: true
 
+    # Runtime obstacle guard control from PS2.
+    # X toggles the guard when the rover is stopped. The older SELECT +
+    # right-stick chord remains available as a fallback, but is disabled by
+    # default because X is easier in the field.
+    ps2_obstacle_x_toggle_enabled: true
+    ps2_obstacle_x_toggle_require_stopped: true
+    ps2_obstacle_control_enabled: false
+    ps2_obstacle_control_hold_sec: 0.80
+    ps2_obstacle_control_threshold: 90
+    ps2_obstacle_control_require_stopped: true
+
     # LiDAR obstacle guard, based on RUDRAv3 navigation's LaserScan topic.
     # Forward drive slows below obstacle_slow_distance_m and stops below
     # obstacle_stop_distance_m. Reverse and turn-in-place remain available.
     obstacle_avoidance_enabled: true
+    obstacle_enable_topic: "/rudra/obstacle_guard_enable"
     scan_topic: "/scan"
     obstacle_front_angle_deg: 70.0
     obstacle_stop_distance_m: 0.45
     obstacle_slow_distance_m: 1.00
     obstacle_scan_timeout_sec: 0.75
     obstacle_status_period_sec: 0.25
+    obstacle_marker_topic: "/rudra/obstacle_guard_marker"
+    obstacle_marker_frame: "laser"
 
 cmd_vel_to_teensy:
   ros__parameters:
@@ -47,9 +61,12 @@ cmd_vel_to_teensy:
     # Forward drive slows below obstacle_slow_distance_m and stops below
     # obstacle_stop_distance_m. Reverse and turn-in-place remain available.
     obstacle_avoidance_enabled: true
+    obstacle_enable_topic: "/rudra/obstacle_guard_enable"
     scan_topic: "/scan"
     obstacle_front_angle_deg: 70.0
     obstacle_stop_distance_m: 0.45
     obstacle_slow_distance_m: 1.00
     obstacle_scan_timeout_sec: 0.75
     obstacle_status_period_sec: 0.25
+    obstacle_marker_topic: "/rudra/obstacle_guard_marker"
+    obstacle_marker_frame: "laser"

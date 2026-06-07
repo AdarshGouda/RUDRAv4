@@ -12,10 +12,12 @@
     DAT = 8
 
   Serial output:
-    J,select,ry,rx,ly,lx
+    J,select,ry,rx,ly,lx,x
 
     - `select` is a 0/1 manual-mode flag toggled by the SELECT button
     - `ry`, `rx`, `ly`, and `lx` are the raw stick readings from PS2X
+    - `x` is the momentary X/CROSS button state, used by ROS2 for obstacle
+      guard toggling
 
   Notes for future maintainers:
     - The controller must be connected before power-up or reset.
@@ -73,7 +75,9 @@ void loop() {
   Serial.print(",");
   Serial.print(ps2x.Analog(PSS_LY));
   Serial.print(",");
-  Serial.println(ps2x.Analog(PSS_LX));
+  Serial.print(ps2x.Analog(PSS_LX));
+  Serial.print(",");
+  Serial.println(ps2x.Button(PSB_CROSS) ? 1 : 0);
 
   delay(LOOP_DELAY_MS);
 }
