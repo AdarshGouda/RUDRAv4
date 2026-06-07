@@ -144,14 +144,14 @@
       <h1>RUDRAv4 Startup</h1>
       <p class="lede">Field bringup guide for launching the NUC, Uno PS2 bridge, Teensy, and Sabertooth drive chain.</p>
       <p class="lede">For the full living setup report, including LiDAR driver findings and troubleshooting notes, open <a href="bringup-report.html">bringup-report.html</a>.</p>
-      <p class="lede">For a terminal-by-terminal SSH workflow with RViz viewing, open <a href="remote-ssh.html">remote-ssh.html</a>.</p>
+      <p class="lede">For a terminal-by-terminal SSH workflow with laptop RViz viewing, open <a href="remote-ssh.html">remote-ssh.html</a>.</p>
     </header>
 
     <section>
       <h2>Normal Manual Drive Chain</h2>
       <div class="grid">
         <div class="card"><strong>PS2 controller</strong><br>Paired receiver sends stick state to the Uno.</div>
-        <div class="card"><strong>Arduino Uno</strong><br>USB serial line: <code>J,select,ry,rx,ly,lx,x</code>.</div>
+        <div class="card"><strong>Arduino Uno</strong><br>USB serial line: <code>J,select,ry,rx,ly,lx,guard</code>.</div>
         <div class="card"><strong>NUC ROS2 bridge</strong><br>Publishes raw values and sends drive lines to Teensy.</div>
         <div class="card"><strong>Teensy</strong><br>USB serial input: <code>D,left,right,enable</code>. Responds with <code>ACK,...</code>.</div>
         <div class="card"><strong>Sabertooth drivers</strong><br>Packet serial from Teensy <code>Serial1/TX1</code> at 9600 baud.</div>
@@ -213,7 +213,15 @@ source /home/rudra/Projects/RUDRAv4/install/setup.bash</code></pre>
       <p>Find the LiDAR USB adapter. Prefer a stable <code>/dev/serial/by-id/...</code> path. If only <code>/dev/ttyUSB0</code> appears, pass that to the launch script.</p>
       <pre><code>bash scripts/list_serial.sh
 bash scripts/run_lidar.sh /dev/ttyUSB0</code></pre>
-      <p>Open RViz to see what the LiDAR sees. The scan appears as green points in the <code>laser</code> frame. When the PS2 or <code>/cmd_vel</code> bridge is running, the obstacle guard marker shows the closest obstacle in the front cone.</p>
+      <p>For normal SSH bringup, run RViz on the laptop and let it subscribe to <code>/scan</code> over the ROS2 network. The NUC only needs to run the LiDAR driver and bridge nodes.</p>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
+rviz2</code></pre>
+      <p>If RViz sees <code>/scan</code> but displays nothing, set the <code>LaserScan</code> display's reliability policy to <code>Best Effort</code>. If the fixed-frame dropdown has no <code>laser</code> option, type the scan frame manually.</p>
+      <pre><code>ros2 topic echo --once /scan | grep frame_id</code></pre>
+      <p>Use the printed value, usually <code>laser</code>, as RViz <code>Global Options</code> &gt; <code>Fixed Frame</code>. The field accepts typed text even when the dropdown is empty.</p>
+      <p>Use the local view script only from the robot desktop or a GUI-capable session. The scan appears as green points in the <code>laser</code> frame. When the PS2 or <code>/cmd_vel</code> bridge is running, the obstacle guard marker shows the closest obstacle in the front cone.</p>
       <pre><code>bash scripts/view_lidar.sh</code></pre>
       <p>Stop the driver and request motor stop:</p>
       <pre><code>bash scripts/stop_lidar.sh</code></pre>
@@ -222,7 +230,10 @@ ros2 topic echo /rudra/obstacle_guard</code></pre>
       <p>Obstacle avoidance can be disabled without stopping the LiDAR driver. This keeps <code>/scan</code> available for future SLAM/Nav while bypassing the low-level forward-drive filter.</p>
       <pre><code>ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: true}"</code></pre>
-      <p>From the PS2 controller, press <code>X</code> while stopped to toggle obstacle avoidance. This requires the updated Uno firmware that publishes the seventh <code>x</code> field.</p>
+      <p>From the PS2 controller, press <code>START</code> to toggle the obstacle guard latch in the Uno firmware. The seventh <code>guard</code> field stays <code>0</code> or <code>1</code> until START is pressed again.</p>
+      <p>The PS2 MODE button would be a natural label, but the vendored PS2X library does not expose MODE as a normal readable button. Watch <code>/rudra/obstacle_guard</code> for the bridge state as <code>enabled=0</code> or <code>enabled=1</code>.</p>
+      <pre><code>ros2 topic echo /rudra/ps2_raw
+ros2 topic echo /rudra/obstacle_guard</code></pre>
       <div class="callout warn">
         Disabling obstacle avoidance is not the same as stopping the LiDAR motor. If no ROS LiDAR process is running and the unit still spins, it is being powered directly by USB. Unplug the LiDAR USB cable or switch off its USB power/hub port.
       </div>
@@ -232,6 +243,7 @@ ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: tru
       <p>Default tuning lives in <code>src/rudra_base_bridge/config/rudra_v4_hardware.yaml</code>.</p>
       <pre><code>obstacle_avoidance_enabled: true
 obstacle_enable_topic: "/rudra/obstacle_guard_enable"
+ps2_obstacle_latch_enabled: true
 scan_topic: "/scan"
 obstacle_front_angle_deg: 70.0
 obstacle_stop_distance_m: 0.45

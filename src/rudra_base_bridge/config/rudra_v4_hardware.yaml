@@ -22,11 +22,10 @@ ps2_uno_to_teensy:
     send_stop_when_disabled: true
 
     # Runtime obstacle guard control from PS2.
-    # X toggles the guard when the rover is stopped. The older SELECT +
-    # right-stick chord remains available as a fallback, but is disabled by
-    # default because X is easier in the field.
-    ps2_obstacle_x_toggle_enabled: true
-    ps2_obstacle_x_toggle_require_stopped: true
+    # Updated Uno firmware publishes a latched guard field toggled by START.
+    # The PS2 MODE button is not exposed as a normal readable button by the
+    # vendored PS2X library.
+    ps2_obstacle_latch_enabled: true
     ps2_obstacle_control_enabled: false
     ps2_obstacle_control_hold_sec: 0.80
     ps2_obstacle_control_threshold: 90

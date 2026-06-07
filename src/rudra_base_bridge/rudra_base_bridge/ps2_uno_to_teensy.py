@@ -20,7 +20,7 @@ class Ps2Packet(NamedTuple):
     rx: int
     ly: int
     lx: int
-    x_button: bool = False
+    obstacle_guard_enabled: Optional[bool] = None
 
 
 class Ps2UnoToTeensy(Node):
@@ -46,8 +46,7 @@ class Ps2UnoToTeensy(Node):
         self.declare_parameter('max_linear_speed_mps', 1.20)
         self.declare_parameter('max_angular_speed_radps', 2.50)
         self.declare_parameter('send_stop_when_disabled', True)
-        self.declare_parameter('ps2_obstacle_x_toggle_enabled', True)
-        self.declare_parameter('ps2_obstacle_x_toggle_require_stopped', True)
+        self.declare_parameter('ps2_obstacle_latch_enabled', True)
         self.declare_parameter('ps2_obstacle_control_enabled', False)
         self.declare_parameter('ps2_obstacle_control_hold_sec', 0.80)
         self.declare_parameter('ps2_obstacle_control_threshold', 90)
@@ -66,11 +65,8 @@ class Ps2UnoToTeensy(Node):
         self.max_linear_speed_mps = float(self.get_parameter('max_linear_speed_mps').value)
         self.max_angular_speed_radps = float(self.get_parameter('max_angular_speed_radps').value)
         self.send_stop_when_disabled = bool(self.get_parameter('send_stop_when_disabled').value)
-        self.ps2_obstacle_x_toggle_enabled = bool(
-            self.get_parameter('ps2_obstacle_x_toggle_enabled').value
-        )
-        self.ps2_obstacle_x_toggle_require_stopped = bool(
-            self.get_parameter('ps2_obstacle_x_toggle_require_stopped').value
+        self.ps2_obstacle_latch_enabled = bool(
+            self.get_parameter('ps2_obstacle_latch_enabled').value
         )
         self.ps2_obstacle_control_enabled = bool(
             self.get_parameter('ps2_obstacle_control_enabled').value
@@ -100,18 +96,17 @@ class Ps2UnoToTeensy(Node):
         self.obstacle_control_target: Optional[bool] = None
         self.obstacle_control_started = 0.0
         self.obstacle_control_latched = False
-        self.last_x_button = False
 
         period = float(self.get_parameter('timer_period_sec').value)
         self.timer = self.create_timer(period, self.loop)
 
         self.get_logger().info(f'Uno port: {self.uno_port}')
         self.get_logger().info(f'Teensy port: {self.teensy_port}')
-        self.get_logger().info('Expected Uno line: J,select,ry,rx,ly,lx[,x]')
+        self.get_logger().info('Expected Uno line: J,select,ry,rx,ly,lx[,guard]')
         self.get_logger().info('Sending Teensy line: D,left,right,enable')
-        if self.ps2_obstacle_x_toggle_enabled:
+        if self.ps2_obstacle_latch_enabled:
             self.get_logger().info(
-                'PS2 obstacle guard toggle: press X while stopped'
+                'PS2 obstacle guard latch: START toggles guard on the Uno'
             )
         if self.ps2_obstacle_control_enabled:
             self.get_logger().info(
@@ -132,10 +127,10 @@ class Ps2UnoToTeensy(Node):
             rx = int(parts[3])
             ly = int(parts[4])
             lx = int(parts[5])
-            x_button = bool(int(parts[6])) if len(parts) == 7 else False
+            guard_enabled = bool(int(parts[6])) if len(parts) == 7 else None
         except ValueError:
             return None
-        return Ps2Packet(select, ry, rx, ly, lx, x_button)
+        return Ps2Packet(select, ry, rx, ly, lx, guard_enabled)
 
     def axis_to_command(self, value: int, invert: bool = False) -> int:
         centered = value - self.axis_center
@@ -178,32 +173,17 @@ class Ps2UnoToTeensy(Node):
         self.obstacle_control_started = 0.0
         self.obstacle_control_latched = False
 
-    def handle_obstacle_x_toggle(
-        self,
-        x_button: bool,
-        throttle: int,
-        steering: int,
-    ) -> None:
-        if not self.ps2_obstacle_x_toggle_enabled:
-            self.last_x_button = x_button
+    def handle_obstacle_latch(self, guard_enabled: Optional[bool]) -> None:
+        if not self.ps2_obstacle_latch_enabled:
+            return
+        if guard_enabled is None:
             return
 
-        stopped = throttle == 0 and steering == 0
-        x_pressed = x_button and not self.last_x_button
-        self.last_x_button = x_button
-
-        if not x_pressed:
-            return
-        if self.ps2_obstacle_x_toggle_require_stopped and not stopped:
-            self.get_logger().info(
-                'Ignoring X obstacle toggle because drive sticks are not centered'
+        if self.obstacle_guard.enabled != guard_enabled:
+            self.obstacle_guard.set_enabled(
+                guard_enabled,
+                source='ps2_latch',
             )
-            return
-
-        self.obstacle_guard.set_enabled(
-            not self.obstacle_guard.enabled,
-            source='ps2_x',
-        )
 
     def handle_obstacle_control_chord(
         self,
@@ -273,11 +253,7 @@ class Ps2UnoToTeensy(Node):
                     parsed.rx,
                     parsed.ly,
                 )
-                self.handle_obstacle_x_toggle(
-                    parsed.x_button,
-                    throttle,
-                    steering,
-                )
+                self.handle_obstacle_latch(parsed.obstacle_guard_enabled)
                 self.handle_obstacle_control_chord(
                     parsed.select,
                     parsed.ry,

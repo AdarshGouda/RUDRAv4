@@ -174,7 +174,7 @@
     <header>
       <div>
         <h1>Remote SSH Bringup</h1>
-        <p class="lede">Terminal-by-terminal commands for launching RUDRAv4 over SSH, watching drive topics, and opening RViz to see the LiDAR scan and obstacle guard.</p>
+        <p class="lede">Terminal-by-terminal commands for launching RUDRAv4 over SSH, watching drive topics, and viewing LiDAR from RViz running on your laptop.</p>
       </div>
       <div class="stamp">
         Updated: 2026-06-06<br>
@@ -184,10 +184,25 @@
 
     <section>
       <h2>SSH Setup</h2>
-      <p>Use one SSH terminal per long-running process. If you want RViz through SSH, connect with trusted X forwarding from your laptop.</p>
+      <p>Use one SSH terminal per long-running robot process. RViz should normally run on the laptop, not through SSH on the NUC. It subscribes to <code>/scan</code> and marker topics over the ROS2 network.</p>
+      <pre><code>ssh rudra@ROBOT_IP</code></pre>
+      <p>Use X forwarding only as a fallback when you specifically want a GUI process to run on the NUC.</p>
       <pre><code>ssh -Y rudra@ROBOT_IP</code></pre>
-      <p>If RViz feels slow over SSH, run RViz on the robot desktop instead, or use a remote desktop session. The ROS commands are the same once you are on the robot.</p>
       <div class="callout warn">Keep the rover lifted or on blocks for first tests. Do not run <code>ps2_uno_to_teensy</code> and <code>cmd_vel_to_teensy</code> at the same time because both own the Teensy serial port.</div>
+    </section>
+
+    <section>
+      <h2>ROS2 Network Setup</h2>
+      <p>Run the robot nodes on the NUC and RViz on the laptop. Both machines must be on the same network and use the same ROS domain.</p>
+      <pre><code>echo $ROS_DOMAIN_ID
+echo $ROS_LOCALHOST_ONLY</code></pre>
+      <p>If either value is different between machines, set both terminals to the same domain and allow network discovery.</p>
+      <pre><code>export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0</code></pre>
+      <p>On the laptop, confirm that it can see robot topics after the NUC launches the LiDAR driver.</p>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+ros2 topic list
+ros2 topic hz /scan</code></pre>
     </section>
 
     <section>
@@ -239,7 +254,8 @@ bash scripts/stop_lidar.sh</code></pre>
       <p>This reads the PS2 controller from the Uno and sends drive commands to the Teensy.</p>
       <pre><code>cd ~/Projects/RUDRAv4
 bash scripts/run_ps2_bridge.sh</code></pre>
-      <p>Press <code>SELECT</code> on the PS2 controller to enable manual drive. Press <code>X</code> while stopped to toggle obstacle avoidance after the Uno has been reflashed with the updated firmware.</p>
+      <p>Press <code>SELECT</code> on the PS2 controller to enable manual drive. Press <code>START</code> to toggle the obstacle guard latch after the Uno has been reflashed with the updated firmware.</p>
+      <p>The seventh <code>guard</code> field in <code>/rudra/ps2_raw</code> is latched by the Uno and remains <code>0</code> or <code>1</code> until START is pressed again. The bridge follows that latch, so the obstacle-guard state appears in <code>/rudra/obstacle_guard</code> as <code>enabled=0</code> or <code>enabled=1</code>. MODE is not used because the vendored PS2X library does not expose it as a normal readable button.</p>
       <div class="callout">For future autonomy, do not run this manual bridge at the same time as the <code>/cmd_vel</code> bridge. Use one owner of the Teensy serial port at a time.</div>
     </section>
 
@@ -261,7 +277,7 @@ ros2 topic echo /rudra/ps2_raw</code></pre>
           <tr><th>Topic</th><th>Meaning</th></tr>
         </thead>
         <tbody>
-          <tr><td><code>/rudra/ps2_raw</code></td><td>Raw Uno packet. Updated firmware should show <code>J,select,ry,rx,ly,lx,x</code>.</td></tr>
+          <tr><td><code>/rudra/ps2_raw</code></td><td>Raw Uno packet. Updated firmware should show <code>J,select,ry,rx,ly,lx,guard</code>.</td></tr>
           <tr><td><code>/rudra/drive_cmd</code></td><td>Final command sent to Teensy, after obstacle guard filtering.</td></tr>
           <tr><td><code>/rudra/teensy_ack</code></td><td>Teensy acknowledgement and motor-side status.</td></tr>
           <tr><td><code>/rudra/obstacle_guard</code></td><td>Text status such as <code>clear</code>, <code>slowing</code>, <code>blocked</code>, or <code>disabled</code>.</td></tr>
@@ -271,11 +287,21 @@ ros2 topic echo /rudra/ps2_raw</code></pre>
     </section>
 
     <section>
-      <h2>Terminal 5: Open RViz</h2>
-      <p>Use this from an SSH session with X forwarding, or from a terminal on the robot desktop.</p>
+      <h2>Laptop Terminal: Open RViz</h2>
+      <p>Run RViz locally on the laptop. The NUC only needs to publish <code>/scan</code>; RViz subscribes across the ROS2 network.</p>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=0
+export ROS_LOCALHOST_ONLY=0
+rviz2</code></pre>
+      <p>In RViz, set the fixed frame to <code>laser</code>, add a <code>LaserScan</code> display, and set its topic to <code>/scan</code>. If the obstacle marker topic is available, add a <code>Marker</code> display for it.</p>
+      <div class="callout note">
+        If RViz prints <code>incompatible QoS</code> for <code>/scan</code>, select the <code>LaserScan</code> display and change <code>Reliability Policy</code> to <code>Best Effort</code>. If the fixed-frame dropdown has no <code>laser</code> option, click the field and type the scan frame manually.
+      </div>
+      <pre><code>ros2 topic echo --once /scan | grep frame_id</code></pre>
+      <p>Use the printed <code>frame_id</code>, usually <code>laser</code>, as RViz <code>Global Options</code> &gt; <code>Fixed Frame</code>.</p>
+      <p>If you are sitting at the robot desktop instead of using a laptop, this repo also has a helper view script:</p>
       <pre><code>cd ~/Projects/RUDRAv4
 bash scripts/view_lidar.sh</code></pre>
-      <p>RViz opens with fixed frame <code>laser</code>. The green points are the raw <code>/scan</code>. The marker sphere is the closest obstacle that the guard is using in the front cone.</p>
       <table>
         <thead>
           <tr><th>RViz Color</th><th>Meaning</th></tr>

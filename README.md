@@ -6,7 +6,7 @@ RUDRAv4 is the ROS2 upgrade path for the RUDRA rover. The current base-control f
 PS2 wireless controller
   ↓
 Arduino Uno with PS2 receiver
-  ↓ USB serial: J,select,ry,rx,ly,lx,x
+  ↓ USB serial: J,select,ry,rx,ly,lx,guard
 NUC rudra running ROS2 Lyrical
   ↓ USB serial: D,left,right,enable
 Teensy 4.1
@@ -173,10 +173,11 @@ ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: tru
 ros2 topic echo /rudra/obstacle_guard
 ```
 
-From the PS2 controller, press `X` while the rover is stopped to toggle
-obstacle avoidance. This requires the updated Uno firmware that publishes the
-seventh `x` field. It does not stop `/scan`; it only changes whether the guard
-filters forward motor commands.
+From the PS2 controller, press `START` to toggle the obstacle guard latch in
+the Uno firmware. MODE would be a natural label, but the vendored PS2X library
+does not expose MODE as a normal readable button. The latched seventh `guard`
+field does not stop `/scan`; it only changes whether the guard filters forward
+motor commands.
 
 Tune these parameters in
 `src/rudra_base_bridge/config/rudra_v4_hardware.yaml` for both
@@ -215,11 +216,11 @@ These replace the old ROS1 `rosserial` path for ROS2 bringup. The Uno only publi
 Uno to NUC:
 
 ```text
-J,select,ry,rx,ly,lx,x
+J,select,ry,rx,ly,lx,guard
 ```
 
 The ROS2 bridge also accepts the old six-field packet during transition, but
-the PS2 `X` toggle only works after reflashing the Uno with the updated
+the PS2 guard latch only works after reflashing the Uno with the updated
 firmware.
 
 NUC to Teensy:

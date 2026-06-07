@@ -12,12 +12,12 @@
     DAT = 8
 
   Serial output:
-    J,select,ry,rx,ly,lx,x
+    J,select,ry,rx,ly,lx,guard
 
     - `select` is a 0/1 manual-mode flag toggled by the SELECT button
     - `ry`, `rx`, `ly`, and `lx` are the raw stick readings from PS2X
-    - `x` is the momentary X/CROSS button state, used by ROS2 for obstacle
-      guard toggling
+    - `guard` is a 0/1 obstacle-guard latch toggled by START. The PS2 MODE
+      button is not exposed as a normal readable button by this PS2X library.
 
   Notes for future maintainers:
     - The controller must be connected before power-up or reset.
@@ -35,6 +35,8 @@ const uint16_t LOOP_DELAY_MS = 50;  // 20 Hz
 
 bool manual_mode = false;
 bool last_select = false;
+bool obstacle_guard_enabled = true;
+bool last_start = false;
 byte vibrate = 0;
 int error = 0;
 
@@ -65,6 +67,14 @@ void loop() {
   }
   last_select = select_now;
 
+  // START toggles the obstacle guard latch. MODE would be a nice physical
+  // choice, but this PS2X library does not report it as a normal button.
+  bool start_now = ps2x.Button(PSB_START);
+  if (start_now && !last_start) {
+    obstacle_guard_enabled = !obstacle_guard_enabled;
+  }
+  last_start = start_now;
+
   // Emit one compact line that the bridge software can parse reliably.
   Serial.print("J,");
   Serial.print(manual_mode ? 1 : 0);
@@ -77,7 +87,7 @@ void loop() {
   Serial.print(",");
   Serial.print(ps2x.Analog(PSS_LX));
   Serial.print(",");
-  Serial.println(ps2x.Button(PSB_CROSS) ? 1 : 0);
+  Serial.println(obstacle_guard_enabled ? 1 : 0);
 
   delay(LOOP_DELAY_MS);
 }

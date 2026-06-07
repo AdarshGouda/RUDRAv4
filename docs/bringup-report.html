@@ -237,7 +237,7 @@ source /home/rudra/Projects/RUDRAv4/install/setup.bash</code></pre>
       <h2>Hardware Chain</h2>
       <div class="flow">
         <div><strong>PS2 Controller</strong><span>Wireless input, SELECT enables manual drive.</span></div>
-        <div><strong>Arduino Uno</strong><span>Reads PS2 receiver and prints <code>J,select,ry,rx,ly,lx,x</code>.</span></div>
+        <div><strong>Arduino Uno</strong><span>Reads PS2 receiver and prints <code>J,select,ry,rx,ly,lx,guard</code>.</span></div>
         <div><strong>NUC ROS2</strong><span>Runs <code>rudra_base_bridge</code> and obstacle guard.</span></div>
         <div><strong>Teensy 4.1</strong><span>Receives <code>D,left,right,enable</code>.</span></div>
         <div><strong>Sabertooths</strong><span>Packet serial from Teensy <code>Serial1/TX1</code>.</span></div>
@@ -269,8 +269,8 @@ source /home/rudra/Projects/RUDRAv4/install/setup.bash</code></pre>
         <div class="card">
           <strong>Uno</strong>
           Sends one line per controller packet:
-          <pre><code>J,select,ry,rx,ly,lx,x</code></pre>
-          The seventh <code>x</code> field is the momentary X/CROSS button.
+          <pre><code>J,select,ry,rx,ly,lx,guard</code></pre>
+          The seventh <code>guard</code> field is latched by the Uno. START toggles it between <code>0</code> and <code>1</code>.
         </div>
         <div class="card">
           <strong>Teensy</strong>
@@ -282,7 +282,7 @@ source /home/rudra/Projects/RUDRAv4/install/setup.bash</code></pre>
           Right address <code>128</code>, left address <code>129</code>, Teensy <code>Serial1/TX1</code>, <code>9600</code> baud.
         </div>
       </div>
-      <p>Do not reflash automatically just because the branch changed. Reflash the Uno when you need the newer <code>J,select,ry,rx,ly,lx,x</code> packet for X-button obstacle guard toggling, or if it is not sending <code>J,...</code>. Reflash the Teensy only if it is not accepting <code>D,...</code>.</p>
+      <p>Do not reflash automatically just because the branch changed. Reflash the Uno when you need the newer <code>J,select,ry,rx,ly,lx,guard</code> packet for START-button obstacle guard latching, or if it is not sending <code>J,...</code>. Reflash the Teensy only if it is not accepting <code>D,...</code>.</p>
       <pre><code>src/rudra_base_bridge/firmware/uno_ps2_plain_serial/uno_ps2_plain_serial.ino
 src/rudra_base_bridge/firmware/teensy_sabertooth_serial_controller/teensy_sabertooth_serial_controller.ino</code></pre>
     </section>
@@ -444,12 +444,12 @@ obstacle_status_period_sec: 0.25</code></pre>
       <p>Runtime topic control:</p>
       <pre><code>ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: false}"
 ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: true}"</code></pre>
-      <p>PS2 X-button control:</p>
-      <pre><code>Press X while the rover is stopped to toggle obstacle avoidance.
-Requires updated Uno firmware publishing: J,select,ry,rx,ly,lx,x</code></pre>
+      <p>PS2 START-button control:</p>
+      <pre><code>Press START to toggle obstacle avoidance.
+Requires updated Uno firmware publishing: J,select,ry,rx,ly,lx,guard</code></pre>
+      <p>The <code>guard</code> field is latched by the Uno, so it stays <code>0</code> or <code>1</code> until START is pressed again. The ROS2 bridge follows that latch and reports the guard state on <code>/rudra/obstacle_guard</code> as <code>enabled=0</code> or <code>enabled=1</code>. MODE is not used because the vendored PS2X library does not expose it as a normal readable button.</p>
       <p>PS2 tuning:</p>
-      <pre><code>ps2_obstacle_x_toggle_enabled: true
-ps2_obstacle_x_toggle_require_stopped: true
+      <pre><code>ps2_obstacle_latch_enabled: true
 ps2_obstacle_control_enabled: false
 ps2_obstacle_control_hold_sec: 0.80
 ps2_obstacle_control_threshold: 90
