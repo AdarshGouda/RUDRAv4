@@ -73,6 +73,13 @@ For battery bringup and headless checks, open:
 docs/startup.html
 ```
 
+For remote SSH terminal-by-terminal launch, topic monitoring, and RViz viewing,
+open:
+
+```text
+docs/remote-ssh.html
+```
+
 For the living setup report covering Uno, Teensy, Sabertooth, LiDAR, driver
 choice, troubleshooting, and the nuances learned during bringup, open:
 
