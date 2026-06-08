@@ -1,6 +1,6 @@
 ydlidar_ros2_driver_node:
   ros__parameters:
-    port: /dev/ttyUSB0
+    port: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
     frame_id: laser
     ignore_array: ""
     baudrate: 128000
@@ -13,13 +13,13 @@ ydlidar_ros2_driver_node:
     inverted: true
     auto_reconnect: true
     isSingleChannel: false
-    intensity: false
-    intensity_bit: 0
-    support_motor_dtr: true
+    intensity: true
+    intensity_bit: 8
+    support_motor_dtr: false
     angle_max: 180.0
     angle_min: -180.0
-    range_max: 12.0
-    range_min: 0.1
+    range_max: 16.0
+    range_min: 0.28
     frequency: 10.0
     invalid_range_is_inf: false
     debug: false

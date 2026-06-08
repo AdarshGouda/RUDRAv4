@@ -230,8 +230,13 @@ class Ps2UnoToTeensy(Node):
     def send_stop(self) -> None:
         now = time.monotonic()
         if now - self.last_sent_stop > 0.10:
-            self.teensy.write_line('D,0,0,0')
-            self.drive_pub.publish(String(data='D,0,0,0'))
+            stop_line = 'D,0,0,0'
+            self.teensy.write_line(stop_line)
+            if rclpy.ok():
+                try:
+                    self.drive_pub.publish(String(data=stop_line))
+                except RuntimeError:
+                    pass
             self.last_sent_stop = now
 
     def loop(self) -> None:
@@ -295,9 +300,11 @@ def main(args: Optional[list[str]] = None) -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        node.send_stop()
+        if rclpy.ok():
+            node.send_stop()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

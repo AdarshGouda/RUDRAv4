@@ -8,6 +8,11 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    default_serial_port = (
+        '/dev/serial/by-id/'
+        'usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0'
+    )
+
     default_config = os.path.join(
         get_package_share_directory('rudra_base_bridge'),
         'config',
@@ -21,7 +26,7 @@ def generate_launch_description():
     )
     serial_port_arg = DeclareLaunchArgument(
         'serial_port',
-        default_value='/dev/ttyUSB0',
+        default_value=default_serial_port,
         description='USB serial port for the YDLIDAR adapter',
     )
     frame_id_arg = DeclareLaunchArgument(
@@ -44,9 +49,27 @@ def generate_launch_description():
         ],
     )
 
+    static_tf = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='rudra_laser_static_tf',
+        output='screen',
+        arguments=[
+            '--x', '0',
+            '--y', '0',
+            '--z', '0',
+            '--roll', '0',
+            '--pitch', '0',
+            '--yaw', '0',
+            '--frame-id', 'base_link',
+            '--child-frame-id', LaunchConfiguration('frame_id'),
+        ],
+    )
+
     return LaunchDescription([
         config_arg,
         serial_port_arg,
         frame_id_arg,
         node,
+        static_tf,
     ])

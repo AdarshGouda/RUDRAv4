@@ -63,28 +63,47 @@ Use `/dev/serial/by-id/...` instead of `/dev/ttyACM0` when possible.
 
 ## Run PS2 manual drive bridge
 
+Use this for the normal PS2-only Rudra bringup:
+
 ```bash
 bash scripts/run_ps2_bridge.sh
 ```
 
-For battery bringup and headless checks, open:
+If you want the PS2 bridge and LiDAR obstacle guard in the same launch, use:
 
-```text
-docs/startup.html
+```bash
+bash scripts/run_ps2_lidar_bridge.sh /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
 ```
 
-For remote SSH terminal-by-terminal launch, topic monitoring, and RViz viewing,
-open:
+Those wrappers call the new launch files directly:
 
-```text
-docs/remote-ssh.html
+- `rudra_ps2.launch.py` for the normal PS2-only bringup.
+- `rudra_ps2_lidar.launch.py` for the PS2 plus LiDAR obstacle bringup.
+- `cmd_vel_to_teensy.launch.py` for ROS `/cmd_vel` control to the Teensy.
+- `lidar.launch.py` for LiDAR-only `/scan` publishing.
+- `lidar_view.launch.py` for RViz-only viewing of `/scan` and the obstacle marker.
+
+On Aghora, you can visualize `/scan` in RViz with the packaged view launch:
+
+```bash
+source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+source install/setup.bash
+ros2 launch rudra_base_bridge lidar_view.launch.py
 ```
 
-For the living setup report covering Uno, Teensy, Sabertooth, LiDAR, driver
-choice, troubleshooting, and the nuances learned during bringup, open:
+`lidar_view.launch.py` starts RViz only. It does not start the LiDAR driver or
+any drive bridge.
+
+The helper scripts in `scripts/` now default to `ROS_DOMAIN_ID=42` and
+`ROS_LOCALHOST_ONLY=0` when those variables are unset, so Rudra and Aghora stay
+on the same DDS domain by default.
+
+Open the main system manual:
 
 ```text
-docs/bringup-report.html
+docs/rudrav4-system-manual.html
 ```
 
 Useful monitors:
@@ -104,17 +123,10 @@ LaserScan convention. Forward motion is scaled down when an obstacle is inside
 the configured front cone and is blocked inside the stop distance. Reverse and
 turn-in-place commands remain available so the rover can back out or rotate.
 
-The obstacle guard only needs a valid `/scan`; the hardware driver must match
-the physical LiDAR. On 2026-06-06 this rover's direct USB LiDAR identified as
-`YDLIDAR G2B`, firmware `3.5`, model code `15`, serial `2022021500070129`.
-Use the YDLIDAR driver stack for this robot. Use `sllidar_ros2` only for
-Slamtec/RPLIDAR hardware.
-
-During bringup on 2026-06-06, `/dev/ttyUSB0` was the LiDAR's CP2102 USB
-adapter, but `sllidar_ros2` timed out on every common Slamtec baud. Since the
-same direct USB LiDAR worked on RUDRAv3 and RUDRAv3 docs mention a
-YDLIDAR-class unit, treat that as a driver/protocol mismatch before
-suspecting wiring.
+The obstacle guard only needs a valid `/scan`; on this robot that comes from a
+`YDLIDAR G2B` through `YDLidar-SDK` plus `ydlidar_ros2_driver`. The working
+RUDRAv4 setup uses the LiDAR adapter's `/dev/serial/by-id/...` path at `128000`
+baud with frame `laser`.
 
 External LiDAR drivers live in `/home/rudra/ros2_ws`, then RUDRAv4 is sourced
 on top:
@@ -137,7 +149,7 @@ Prefer the stable `/dev/serial/by-id/...` path for the LiDAR adapter. If only
 Run the LiDAR driver:
 
 ```bash
-bash scripts/run_lidar.sh /dev/ttyUSB0
+bash scripts/run_lidar.sh /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
 ```
 
 Open RViz to see the scan and obstacle guard marker:
@@ -146,22 +158,16 @@ Open RViz to see the scan and obstacle guard marker:
 bash scripts/view_lidar.sh
 ```
 
-RViz displays `/scan` as green points in the `laser` frame. When a bridge node
-is running, `/rudra/obstacle_guard_marker` shows the closest front-cone
+RViz displays `/scan` as green points with `base_link` as the fixed frame and a
+static transform to the LiDAR `laser` frame. When a bridge node is running,
+`/rudra/obstacle_guard_marker` shows the closest front-cone
 obstacle used by the guard: green is clear, orange is slowing, red is blocked,
 and gray means the guard is disabled.
 
 The default RUDRAv4 LiDAR launch uses `ydlidar_ros2_driver` with
-`src/rudra_base_bridge/config/ydlidar_g2b.yaml`: `/dev/ttyUSB0`, `128000`
-baud, `sample_rate: 5`, `frequency: 10.0`, and scan frame `laser`. The legacy
-Slamtec launch is still available as `sllidar.launch.py`:
-
-```bash
-ros2 launch rudra_base_bridge sllidar.launch.py \
-  serial_port:=/dev/ttyUSB0 \
-  serial_baudrate:=115200 \
-  scan_mode:=Sensitivity
-```
+`src/rudra_base_bridge/config/ydlidar_g2b.yaml` and the LiDAR adapter's
+`/dev/serial/by-id/...` path, `128000` baud, `sample_rate: 5`,
+`frequency: 10.0`, `intensity: true`, and scan frame `laser`.
 
 The spinning LiDAR and the obstacle guard are separate. Keep the driver
 publishing `/scan` for SLAM/Nav, and enable or disable only the low-level drive

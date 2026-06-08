@@ -7,6 +7,7 @@ import time
 from typing import Optional, Tuple
 
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
 from std_msgs.msg import Bool
 from std_msgs.msg import String
@@ -63,7 +64,7 @@ class LidarObstacleGuard:
             LaserScan,
             self.scan_topic,
             self.scan_callback,
-            10,
+            qos_profile_sensor_data,
         )
 
         if self.enabled:
