@@ -103,11 +103,17 @@ dcdc_usb_monitor:
     critical_voltage: 13.2
     shutdown_voltage: 12.8
 
-    # DCDC-USB default output is 12 V. Change this if your NUC requires 19 V
-    # or another jumper/programmed output voltage.
-    expected_output_voltage: 12.0
-    output_voltage_tolerance: 1.0
+    # NUC rail from the DCDC-USB. Your board is currently programmed around
+    # 19.6 V, so warn if live or programmed output leaves this range.
+    expected_output_min_voltage: 19.0
+    expected_output_max_voltage: 20.5
+
+    # The DCDC-USB does not report current. This warns on sudden input voltage
+    # sag, which is the best available hint of high load or a weak pack.
+    input_sag_window_sec: 10.0
+    input_sag_warning_voltage: 0.8
 
     # Keep graceful shutdown opt-in until the live thresholds are validated.
     shutdown_enabled: false
+    shutdown_hold_sec: 5.0
     shutdown_command: "sudo shutdown -h now"

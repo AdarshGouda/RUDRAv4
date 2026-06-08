@@ -108,8 +108,9 @@ Use it in three stages:
    connected for telemetry, and start `dcdc_usb_monitor`.
 
 Before stage 3, confirm the NUC accepts the programmed DCDC voltage. Your board
-may report a programmed output such as `17.76 V`; set `expected_output_voltage`
-to the voltage you actually intend to feed the NUC.
+has reported live output around `19.4 V` and programmed output around `19.6 V`,
+so the default ROS configuration now expects at least `19.0 V` and warns above
+`20.5 V`.
 
 ## Run The ROS Monitor
 
@@ -158,9 +159,12 @@ dcdc_usb_monitor:
     warning_voltage: 14.4
     critical_voltage: 13.2
     shutdown_voltage: 12.8
-    expected_output_voltage: 12.0
-    output_voltage_tolerance: 1.0
+    expected_output_min_voltage: 19.0
+    expected_output_max_voltage: 20.5
+    input_sag_window_sec: 10.0
+    input_sag_warning_voltage: 0.8
     shutdown_enabled: false
+    shutdown_hold_sec: 5.0
 ```
 
 For a 4S LiPo:
@@ -175,6 +179,26 @@ The monitor estimates state-of-charge from pack voltage linearly. That is only
 a rough dashboard hint, because LiPo voltage sag depends on load and battery
 condition.
 
+## Warnings
+
+The DCDC-USB status available through this utility includes voltages and status
+flags, but not output current. That means the node cannot calculate watts
+directly.
+
+It does publish useful warnings through `/diagnostics`:
+
+- low LiPo input at or below `warning_voltage`
+- critical LiPo input at or below `critical_voltage`
+- DCDC output below `expected_output_min_voltage`
+- DCDC output above `expected_output_max_voltage`
+- programmed output outside the expected range
+- output disabled while the monitor is running
+- sudden input voltage sag over `input_sag_window_sec`
+
+Input sag is the best available hint that NUC load is higher than usual, the
+LiPo is weak, or wiring resistance is too high. Treat it as a prompt to inspect
+the power path, not as a precise power measurement.
+
 ## Optional Graceful Shutdown
 
 Leave shutdown disabled until the DCDC readings match a multimeter and the NUC
@@ -185,8 +209,9 @@ After validation, enable:
 ```yaml
 shutdown_enabled: true
 shutdown_voltage: 12.8
+shutdown_hold_sec: 5.0
 shutdown_command: "sudo shutdown -h now"
 ```
 
-The node will run the shutdown command only once when input voltage reaches the
-shutdown threshold.
+The node will run the shutdown command only once after input voltage remains at
+or below the shutdown threshold for `shutdown_hold_sec`.

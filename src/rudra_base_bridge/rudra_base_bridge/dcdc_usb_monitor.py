@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, field
 import math
 import re
@@ -178,9 +179,12 @@ class DcdcUsbMonitorNode(Node):
         self.declare_parameter('warning_voltage', 14.4)
         self.declare_parameter('critical_voltage', 13.2)
         self.declare_parameter('shutdown_voltage', 12.8)
-        self.declare_parameter('expected_output_voltage', 12.0)
-        self.declare_parameter('output_voltage_tolerance', 1.0)
+        self.declare_parameter('expected_output_min_voltage', 19.0)
+        self.declare_parameter('expected_output_max_voltage', 20.5)
+        self.declare_parameter('input_sag_window_sec', 10.0)
+        self.declare_parameter('input_sag_warning_voltage', 0.8)
         self.declare_parameter('shutdown_enabled', False)
+        self.declare_parameter('shutdown_hold_sec', 5.0)
         self.declare_parameter('shutdown_command', 'sudo shutdown -h now')
 
         command = str(self.get_parameter('dcdc_usb_command').value)
@@ -195,13 +199,20 @@ class DcdcUsbMonitorNode(Node):
         self.warning_voltage = float(self.get_parameter('warning_voltage').value)
         self.critical_voltage = float(self.get_parameter('critical_voltage').value)
         self.shutdown_voltage = float(self.get_parameter('shutdown_voltage').value)
-        self.expected_output_voltage = float(
-            self.get_parameter('expected_output_voltage').value
+        self.expected_output_min_voltage = float(
+            self.get_parameter('expected_output_min_voltage').value
         )
-        self.output_voltage_tolerance = float(
-            self.get_parameter('output_voltage_tolerance').value
+        self.expected_output_max_voltage = float(
+            self.get_parameter('expected_output_max_voltage').value
+        )
+        self.input_sag_window_sec = float(
+            self.get_parameter('input_sag_window_sec').value
+        )
+        self.input_sag_warning_voltage = float(
+            self.get_parameter('input_sag_warning_voltage').value
         )
         self.shutdown_enabled = bool(self.get_parameter('shutdown_enabled').value)
+        self.shutdown_hold_sec = float(self.get_parameter('shutdown_hold_sec').value)
         self.shutdown_command = str(self.get_parameter('shutdown_command').value)
 
         self.battery_pub = self.create_publisher(
@@ -216,6 +227,8 @@ class DcdcUsbMonitorNode(Node):
         )
 
         self.shutdown_triggered = False
+        self._shutdown_low_since: Optional[float] = None
+        self._input_voltage_history: deque[tuple[float, float]] = deque()
         self._last_error_log_sec = 0.0
         poll_period_sec = float(self.get_parameter('poll_period_sec').value)
         self.timer = self.create_timer(poll_period_sec, self._poll)
@@ -229,6 +242,7 @@ class DcdcUsbMonitorNode(Node):
             self._log_error_rate_limited(error or 'DCDC-USB status unavailable')
             return
 
+        self._record_input_voltage(status)
         self.battery_pub.publish(self._make_battery_msg(status))
         self.diagnostics_pub.publish(self._make_diagnostics_msg(status))
         self._maybe_shutdown(status)
@@ -306,19 +320,30 @@ class DcdcUsbMonitorNode(Node):
         if input_voltage <= self.warning_voltage:
             return DIAG_WARN, 'NUC LiPo input voltage low'
 
-        if output_voltage is not None and self.expected_output_voltage > 0.0:
-            low = self.expected_output_voltage - self.output_voltage_tolerance
-            high = self.expected_output_voltage + self.output_voltage_tolerance
-            if status.output_enabled is True and output_voltage < low:
+        if output_voltage is not None:
+            if (
+                status.output_enabled is True
+                and output_voltage < self.expected_output_min_voltage
+            ):
                 return DIAG_ERROR, 'DCDC output below expected range'
-            if status.output_enabled is True and output_voltage > high:
+            if (
+                status.output_enabled is True
+                and output_voltage > self.expected_output_max_voltage
+            ):
                 return DIAG_WARN, 'DCDC output above expected range'
             configured = status.programmed_output_voltage
-            if configured is not None and not low <= configured <= high:
+            if configured is not None and not self._output_in_expected_range(configured):
                 return DIAG_WARN, 'DCDC programmed output differs from expected range'
 
         if status.output_enabled is False:
             return DIAG_WARN, 'DCDC output is disabled'
+
+        input_sag = self._input_voltage_sag()
+        if (
+            input_sag is not None
+            and input_sag >= self.input_sag_warning_voltage
+        ):
+            return DIAG_WARN, 'NUC input voltage sag suggests high load or weak pack'
 
         return DIAG_OK, 'NUC DCDC power nominal'
 
@@ -331,6 +356,10 @@ class DcdcUsbMonitorNode(Node):
             self._kv('estimated_soc', self._estimate_percentage(status.input_voltage)),
             self._kv('cell_count', self.cell_count),
             self._kv('average_cell_voltage_v', self._average_cell_voltage(status)),
+            self._kv('input_voltage_sag_v', self._input_voltage_sag()),
+            self._kv('input_sag_window_sec', self.input_sag_window_sec),
+            self._kv('expected_output_min_voltage_v', self.expected_output_min_voltage),
+            self._kv('expected_output_max_voltage_v', self.expected_output_max_voltage),
             self._kv('mode_number', status.mode_number),
             self._kv('mode_name', status.mode_name),
             self._kv('state', status.state),
@@ -345,6 +374,14 @@ class DcdcUsbMonitorNode(Node):
         if not self.shutdown_enabled or self.shutdown_triggered:
             return
         if status.input_voltage is None or status.input_voltage > self.shutdown_voltage:
+            self._shutdown_low_since = None
+            return
+
+        now = time.monotonic()
+        if self._shutdown_low_since is None:
+            self._shutdown_low_since = now
+            return
+        if now - self._shutdown_low_since < self.shutdown_hold_sec:
             return
 
         args = shlex.split(self.shutdown_command)
@@ -360,6 +397,31 @@ class DcdcUsbMonitorNode(Node):
             subprocess.Popen(args)
         except OSError as exc:
             self.get_logger().error(f'Failed to run shutdown command: {exc}')
+
+    def _record_input_voltage(self, status: DcdcUsbStatus) -> None:
+        if status.input_voltage is None:
+            return
+
+        now = time.monotonic()
+        self._input_voltage_history.append((now, status.input_voltage))
+        cutoff = now - self.input_sag_window_sec
+        while self._input_voltage_history and self._input_voltage_history[0][0] < cutoff:
+            self._input_voltage_history.popleft()
+
+    def _input_voltage_sag(self) -> Optional[float]:
+        if len(self._input_voltage_history) < 2:
+            return None
+
+        voltages = [sample[1] for sample in self._input_voltage_history]
+        sag = max(voltages) - voltages[-1]
+        return max(0.0, sag)
+
+    def _output_in_expected_range(self, voltage: float) -> bool:
+        return (
+            self.expected_output_min_voltage
+            <= voltage
+            <= self.expected_output_max_voltage
+        )
 
     def _estimate_percentage(self, input_voltage: Optional[float]) -> float:
         if input_voltage is None:
