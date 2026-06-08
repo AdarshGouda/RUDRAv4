@@ -21,10 +21,10 @@ from sensor_msgs.msg import BatteryState
 _KEY_VALUE_RE = re.compile(r'^\s*([^:]+):\s*(.*?)\s*$')
 _MODE_RE = re.compile(r'^(?P<number>\d+)(?:\s*\((?P<name>[^)]+)\))?')
 
-DIAG_OK = 0
-DIAG_WARN = 1
-DIAG_ERROR = 2
-DIAG_STALE = 3
+DIAG_OK = b'\x00'
+DIAG_WARN = b'\x01'
+DIAG_ERROR = b'\x02'
+DIAG_STALE = b'\x03'
 
 
 @dataclass(frozen=True)
@@ -288,7 +288,7 @@ class DcdcUsbMonitorNode(Node):
         msg.location = 'nuc_dcdc_input'
         return msg
 
-    def _diagnostic_state(self, status: DcdcUsbStatus) -> tuple[int, str]:
+    def _diagnostic_state(self, status: DcdcUsbStatus) -> tuple[bytes, str]:
         input_voltage = status.input_voltage
         output_voltage = status.output_voltage
 

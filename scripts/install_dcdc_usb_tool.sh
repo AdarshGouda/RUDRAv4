@@ -12,19 +12,18 @@ fi
 make -C "${DCDC_SRC}" clean
 make -C "${DCDC_SRC}"
 sudo make -C "${DCDC_SRC}" install
+sudo tee /etc/udev/rules.d/99-dcdc-usb.rules >/dev/null <<'EOF'
+SUBSYSTEM=="usb", ATTR{idVendor}=="04d8", ATTR{idProduct}=="d003", MODE="0660", GROUP="plugdev", TAG+="uaccess"
+EOF
+sudo udevadm control --reload-rules
+sudo udevadm trigger
 
 cat <<'EOF'
 
-DCDC-USB utility installed.
+DCDC-USB utility and udev rule installed.
 
-If `dcdc-usb -a` only works with sudo, add a udev rule like:
+Unplug and reconnect the DCDC-USB USB cable, then test:
 
-  SUBSYSTEM=="usb", ATTR{idVendor}=="04d8", ATTR{idProduct}=="d003", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-
-Then reload rules and reconnect the DCDC-USB:
-
-  sudo udevadm control --reload-rules
-  sudo udevadm trigger
+  dcdc-usb -a
 
 EOF
-

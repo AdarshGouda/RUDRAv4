@@ -43,6 +43,10 @@ cd /home/rudra/Projects/RUDRAv4
 bash scripts/install_dcdc_usb_tool.sh
 ```
 
+The installer also writes `/etc/udev/rules.d/99-dcdc-usb.rules`. Unplug and
+reconnect the DCDC-USB USB cable after the installer completes so Linux applies
+the new device permissions.
+
 Check the board manually:
 
 ```bash
@@ -58,17 +62,9 @@ mode: 0 (dumb)
 output enable: On
 ```
 
-If the command only works with `sudo`, add a udev rule:
-
-```bash
-sudo tee /etc/udev/rules.d/99-dcdc-usb.rules >/dev/null <<'EOF'
-SUBSYSTEM=="usb", ATTR{idVendor}=="04d8", ATTR{idProduct}=="d003", MODE="0660", GROUP="plugdev", TAG+="uaccess"
-EOF
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
-
-Then unplug and reconnect the DCDC-USB USB cable.
+If `dcdc-usb -a` reports `Cannot claim interface 0`, reconnect the USB cable
+first. If it still fails, run `sudo dcdc-usb -a` once to distinguish a
+permissions issue from a kernel-driver claim issue.
 
 ## Run The ROS Monitor
 

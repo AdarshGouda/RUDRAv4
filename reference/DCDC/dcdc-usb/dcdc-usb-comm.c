@@ -82,28 +82,27 @@ int dcdc_setup(struct usb_dev_handle *h)
     {
 	if (usb_detach_kernel_driver_np(h, 0) < 0)
 	{
-	    fprintf(stderr, "Cannot detach from kernel driver\n");
+	    fprintf(stderr, "Cannot detach from kernel driver: %s\n", usb_strerror());
 	    return -2;
 	}
     }
     
     if (usb_set_configuration(h, 1) < 0)
     {
-	fprintf(stderr, "Cannot set configuration 1 for the device\n");
-	return -3;
+	fprintf(stderr, "Warning: cannot set configuration 1 (%s); continuing with current configuration\n", usb_strerror());
     }
     
     usleep(1000);
     
     if (usb_claim_interface(h, 0) < 0)
     {
-	fprintf(stderr, "Cannot claim interface 0\n");
+	fprintf(stderr, "Cannot claim interface 0: %s\n", usb_strerror());
 	return -4;
     }
 
     if (usb_set_altinterface(h, 0) < 0)
     {
-	fprintf(stderr, "Cannot set alternate configuration\n");
+	fprintf(stderr, "Cannot set alternate configuration: %s\n", usb_strerror());
 	return -5;
     }
     
@@ -111,7 +110,7 @@ int dcdc_setup(struct usb_dev_handle *h)
 		0x000000a, 0x0000000, 0x0000000, buf, 0x0000000, 1000) 
 	< 0)
     {
-	fprintf(stderr, "Cannot send control message\n");
+	fprintf(stderr, "Cannot send control message: %s\n", usb_strerror());
 	return -6;
     }
 
