@@ -81,3 +81,33 @@ cmd_vel_to_teensy:
     obstacle_status_period_sec: 0.25
     obstacle_marker_topic: "/rudra/obstacle_guard_marker"
     obstacle_marker_frame: "laser"
+
+dcdc_usb_monitor:
+  ros__parameters:
+    # Mini-Box DCDC-USB Linux utility. Install it from reference/DCDC/dcdc-usb
+    # or override this with the full path to your locally built binary.
+    dcdc_usb_command: "dcdc-usb -a"
+    poll_period_sec: 1.0
+    command_timeout_sec: 2.0
+
+    battery_topic: "/rudra/nuc_battery"
+    diagnostics_topic: "/diagnostics"
+    battery_frame_id: "nuc_power"
+    diagnostics_name: "rudra_nuc_dcdc"
+
+    # 4S LiPo pack feeding the DCDC input.
+    cell_count: 4
+    full_voltage: 16.8
+    empty_voltage: 13.2
+    warning_voltage: 14.4
+    critical_voltage: 13.2
+    shutdown_voltage: 12.8
+
+    # DCDC-USB default output is 12 V. Change this if your NUC requires 19 V
+    # or another jumper/programmed output voltage.
+    expected_output_voltage: 12.0
+    output_voltage_tolerance: 1.0
+
+    # Keep graceful shutdown opt-in until the live thresholds are validated.
+    shutdown_enabled: false
+    shutdown_command: "sudo shutdown -h now"

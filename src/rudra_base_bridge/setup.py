@@ -40,6 +40,7 @@ setup(
             'cmd_vel_to_teensy = rudra_base_bridge.cmd_vel_to_teensy:main',
             'list_serial_ports = rudra_base_bridge.serial_port_list:main',
             'odom_tf_broadcaster = rudra_base_bridge.odom_tf_broadcaster:main',
+            'dcdc_usb_monitor = rudra_base_bridge.dcdc_usb_monitor:main',
         ],
     },
 )

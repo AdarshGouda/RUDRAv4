@@ -116,7 +116,45 @@ ros2 topic echo /rudra/ps2_raw
 ros2 topic echo /rudra/drive_cmd
 ros2 topic echo /rudra/teensy_ack
 ros2 topic echo /rudra/obstacle_guard
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
 ros2 topic echo /cmd_vel
+```
+
+## DCDC-USB NUC power monitor
+
+RUDRAv4 can monitor a Mini-Box DCDC-USB that powers the NUC from a dedicated
+4S LiPo. This is a monitor-first integration: the jumper/vendor configuration
+sets the DCDC output voltage, while ROS reads input/output voltage and publishes
+NUC power health.
+
+Install the Mini-Box Linux utility from the checked-in reference source:
+
+```bash
+bash scripts/install_dcdc_usb_tool.sh
+dcdc-usb -a
+```
+
+Run the standalone monitor:
+
+```bash
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
+```
+
+Or include it in the full PS2, LiDAR, IMU/wheel odom, and localization bringup:
+
+```bash
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true
+```
+
+The monitor publishes `/rudra/nuc_battery` and `/diagnostics`. Configure 4S
+LiPo thresholds and the expected DCDC output voltage in
+`src/rudra_base_bridge/config/rudra_v4_hardware.yaml`.
+
+Read the detailed setup notes before plugging the NUC into the DCDC output:
+
+```text
+docs/dcdc_usb_nuc_power.md
 ```
 
 ## LiDAR obstacle guard
