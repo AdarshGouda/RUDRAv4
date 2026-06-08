@@ -62,9 +62,54 @@ mode: 0 (dumb)
 output enable: On
 ```
 
+If the board is connected only by USB, output may look like this instead:
+
+```text
+input voltage: 0.00
+output voltage: 0.000000
+output enable: Off
+output voltage: 17.76
+```
+
+That means the NUC can talk to the DCDC-USB over USB, but the DCDC input is not
+powered by the LiPo yet. The final `output voltage: 17.76` is the programmed
+target voltage, not a live powered output reading.
+
 If `dcdc-usb -a` reports `Cannot claim interface 0`, reconnect the USB cable
 first. If it still fails, run `sudo dcdc-usb -a` once to distinguish a
 permissions issue from a kernel-driver claim issue.
+
+## What This Does On RUDRA
+
+The DCDC-USB does not control the drivetrain. It is a dedicated NUC power rail:
+
+```text
+drive battery / Sabertooths / Teensy
+  -> keep existing RUDRA motor power wiring
+
+4S LiPo
+  -> DCDC-USB input
+  -> DCDC-USB regulated output
+  -> NUC DC input
+
+DCDC-USB USB
+  -> NUC USB port
+  -> ROS /rudra/nuc_battery and /diagnostics
+```
+
+Use it in three stages:
+
+1. USB-only bench test: verify `dcdc-usb -a` works. Seeing `input voltage: 0.00`
+   is normal if the LiPo is not connected.
+2. Powered bench test without the NUC load: connect the 4S LiPo to DCDC input
+   and check the live output with a multimeter before plugging the output into
+   the NUC.
+3. Robot integration: power the NUC from the DCDC output, keep the USB cable
+   connected for telemetry, and start `dcdc_usb_monitor`.
+
+Before stage 3, confirm the NUC accepts the programmed DCDC voltage. Your board
+may report a programmed output such as `17.76 V`; set `expected_output_voltage`
+to the voltage you actually intend to feed the NUC.
 
 ## Run The ROS Monitor
 

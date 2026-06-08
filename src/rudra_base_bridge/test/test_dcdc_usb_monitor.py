@@ -15,6 +15,7 @@ output enable: On
 aux vin enable Off
 status flags 1: 10
 version: 1.8
+output voltage: 17.76
 """
 
     status = parse_dcdc_usb_output(output)
@@ -25,6 +26,7 @@ version: 1.8
     assert status.input_voltage == 15.42
     assert status.ignition_voltage == 0.00
     assert status.output_voltage == 12.06
+    assert status.programmed_output_voltage == 17.76
     assert status.power_switch_on is True
     assert status.output_enabled is True
     assert status.aux_vin_enabled is False

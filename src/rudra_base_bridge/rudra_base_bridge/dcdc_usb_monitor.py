@@ -34,6 +34,7 @@ class DcdcUsbStatus:
     input_voltage: Optional[float] = None
     ignition_voltage: Optional[float] = None
     output_voltage: Optional[float] = None
+    programmed_output_voltage: Optional[float] = None
     mode_number: Optional[int] = None
     mode_name: str = ''
     state: Optional[int] = None
@@ -85,7 +86,10 @@ def parse_dcdc_usb_output(output: str) -> DcdcUsbStatus:
         match = _KEY_VALUE_RE.match(line)
         if match:
             key = match.group(1).strip().lower()
-            raw_values[key] = match.group(2).strip()
+            if key == 'output voltage' and key in raw_values:
+                raw_values['programmed output voltage'] = match.group(2).strip()
+            else:
+                raw_values[key] = match.group(2).strip()
             continue
 
         # The Linux parser prints this one without a colon.
@@ -104,6 +108,9 @@ def parse_dcdc_usb_output(output: str) -> DcdcUsbStatus:
         input_voltage=_parse_optional_float(raw_values.get('input voltage')),
         ignition_voltage=_parse_optional_float(raw_values.get('ignition voltage')),
         output_voltage=_parse_optional_float(raw_values.get('output voltage')),
+        programmed_output_voltage=_parse_optional_float(
+            raw_values.get('programmed output voltage')
+        ),
         mode_number=mode_number,
         mode_name=mode_name,
         state=_parse_optional_int(raw_values.get('state')),
@@ -302,10 +309,13 @@ class DcdcUsbMonitorNode(Node):
         if output_voltage is not None and self.expected_output_voltage > 0.0:
             low = self.expected_output_voltage - self.output_voltage_tolerance
             high = self.expected_output_voltage + self.output_voltage_tolerance
-            if output_voltage < low:
+            if status.output_enabled is True and output_voltage < low:
                 return DIAG_ERROR, 'DCDC output below expected range'
-            if output_voltage > high:
+            if status.output_enabled is True and output_voltage > high:
                 return DIAG_WARN, 'DCDC output above expected range'
+            configured = status.programmed_output_voltage
+            if configured is not None and not low <= configured <= high:
+                return DIAG_WARN, 'DCDC programmed output differs from expected range'
 
         if status.output_enabled is False:
             return DIAG_WARN, 'DCDC output is disabled'
@@ -316,6 +326,7 @@ class DcdcUsbMonitorNode(Node):
         values = [
             self._kv('input_voltage_v', status.input_voltage),
             self._kv('output_voltage_v', status.output_voltage),
+            self._kv('programmed_output_voltage_v', status.programmed_output_voltage),
             self._kv('ignition_voltage_v', status.ignition_voltage),
             self._kv('estimated_soc', self._estimate_percentage(status.input_voltage)),
             self._kv('cell_count', self.cell_count),
