@@ -148,9 +148,10 @@ ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc
 ```
 
 The monitor publishes `/rudra/nuc_battery` and `/diagnostics`. It warns on low
-LiPo voltage, DCDC output outside the expected 19 V NUC range, and sudden input
-voltage sag that can suggest unusually high load or weak wiring/battery. Configure
-thresholds in `src/rudra_base_bridge/config/rudra_v4_hardware.yaml`.
+LiPo voltage, DCDC output outside the NUC's `19 V +/- 10%` input range, and
+sudden input voltage sag that can suggest unusually high load or weak
+wiring/battery. Configure thresholds in
+`src/rudra_base_bridge/config/rudra_v4_hardware.yaml`.
 
 Read the detailed setup notes before plugging the NUC into the DCDC output:
 

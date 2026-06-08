@@ -103,10 +103,9 @@ dcdc_usb_monitor:
     critical_voltage: 13.2
     shutdown_voltage: 12.8
 
-    # NUC rail from the DCDC-USB. Your board is currently programmed around
-    # 19.6 V, so warn if live or programmed output leaves this range.
-    expected_output_min_voltage: 19.0
-    expected_output_max_voltage: 20.5
+    # NUC rail from the DCDC-USB. The NUC is rated for 19 V +/- 10%.
+    expected_output_min_voltage: 17.1
+    expected_output_max_voltage: 20.9
 
     # The DCDC-USB does not report current. This warns on sudden input voltage
     # sag, which is the best available hint of high load or a weak pack.

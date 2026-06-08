@@ -28,10 +28,8 @@ The Mini-Box DCDC-USB product page
 unit with 6-34 V input, programmable 5-24 V output, 12 V default output, and USB
 configuration/status support.
 
-Before plugging the NUC into the DCDC output, verify the NUC's accepted input
-range from the NUC label or datasheet. Many NUC power bricks are 19 V, while
-some NUC models tolerate a wider 12-19 V range. Do not assume the DCDC-USB
-default 12 V output is correct for your NUC.
+The RUDRA NUC is rated for `19 V +/- 10%`, so its expected input range is
+approximately `17.1 V` to `20.9 V`.
 
 ## Install The DCDC-USB Linux Utility
 
@@ -107,10 +105,9 @@ Use it in three stages:
 3. Robot integration: power the NUC from the DCDC output, keep the USB cable
    connected for telemetry, and start `dcdc_usb_monitor`.
 
-Before stage 3, confirm the NUC accepts the programmed DCDC voltage. Your board
-has reported live output around `19.4 V` and programmed output around `19.6 V`,
-so the default ROS configuration now expects at least `19.0 V` and warns above
-`20.5 V`.
+Before stage 3, confirm the DCDC output with a multimeter. Your board has
+reported live output around `19.4 V` and programmed output around `19.6 V`,
+which sits inside the NUC's `17.1-20.9 V` tolerance band.
 
 ## Run The ROS Monitor
 
@@ -159,8 +156,8 @@ dcdc_usb_monitor:
     warning_voltage: 14.4
     critical_voltage: 13.2
     shutdown_voltage: 12.8
-    expected_output_min_voltage: 19.0
-    expected_output_max_voltage: 20.5
+    expected_output_min_voltage: 17.1
+    expected_output_max_voltage: 20.9
     input_sag_window_sec: 10.0
     input_sag_warning_voltage: 0.8
     shutdown_enabled: false
