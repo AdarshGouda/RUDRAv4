@@ -12,6 +12,7 @@ from std_msgs.msg import String
 
 from .obstacle_guard import LidarObstacleGuard
 from .serial_utils import apply_deadband, clamp, clamp_int, LineSerial
+from .teensy_telemetry import TeensyTelemetryBridge
 
 
 class Ps2Packet(NamedTuple):
@@ -84,6 +85,7 @@ class Ps2UnoToTeensy(Node):
         self.uno = LineSerial(self.uno_port, self.baud)
         self.teensy = LineSerial(self.teensy_port, self.baud)
         self.obstacle_guard = LidarObstacleGuard(self)
+        self.teensy_telemetry = TeensyTelemetryBridge(self)
 
         self.raw_pub = self.create_publisher(String, '/rudra/ps2_raw', 10)
         self.drive_pub = self.create_publisher(String, '/rudra/drive_cmd', 10)
@@ -281,9 +283,10 @@ class Ps2UnoToTeensy(Node):
                 if self.publish_cmd_vel_enabled:
                     self.publish_cmd_vel(throttle, steering, enable)
 
-        for ack in self.teensy.drain_available(max_lines=5):
+        for ack in self.teensy.drain_available(max_lines=12):
             if ack:
-                self.ack_pub.publish(String(data=ack))
+                if not self.teensy_telemetry.handle_line(ack):
+                    self.ack_pub.publish(String(data=ack))
 
         timed_out = (now - self.last_valid_packet_time) > self.command_timeout_sec
         if timed_out or (not self.last_enable and self.send_stop_when_disabled):

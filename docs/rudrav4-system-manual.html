@@ -464,7 +464,7 @@ bash scripts/stop_lidar.sh</code></pre>
 
     <section id="launch">
       <h2>Launch Modes</h2>
-      <p>There are three practical robot-side control modes. Use only one bridge that owns the Teensy at a time.</p>
+      <p>There are now four practical robot-side control modes. Use only one bridge that owns the Teensy at a time.</p>
       <table>
         <thead>
           <tr><th>Mode</th><th>Use When</th><th>Command</th></tr>
@@ -472,6 +472,7 @@ bash scripts/stop_lidar.sh</code></pre>
         <tbody>
           <tr><td>Manual PS2 only</td><td>Normal base-control bringup without LiDAR filtering.</td><td><code>bash scripts/run_ps2_bridge.sh</code></td></tr>
           <tr><td>Manual PS2 with LiDAR obstacle guard</td><td>Drive from the controller while keeping <code>/scan</code> and low-level forward filtering active.</td><td><code>bash scripts/run_ps2_lidar_bridge.sh /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0</code></td></tr>
+          <tr><td>Manual PS2 with LiDAR and localization</td><td>Drive from the controller while LiDAR, wheel odom, IMU telemetry, and fused odom all run together.</td><td><code>bash scripts/run_ps2_lidar_localization.sh</code></td></tr>
           <tr><td><code>/cmd_vel</code> to Teensy</td><td>Keyboard teleop, autonomy, SLAM, Nav2, or anything else publishing <code>/cmd_vel</code>.</td><td><code>bash scripts/run_cmd_vel_bridge.sh</code></td></tr>
         </tbody>
       </table>
@@ -483,17 +484,22 @@ bash scripts/stop_lidar.sh</code></pre>
         <tbody>
           <tr><td><code>rudra_ps2.launch.py</code></td><td><code>ps2_uno_to_teensy</code></td><td>Manual PS2 driving only. Reads the Uno packet, publishes status topics, and sends final motor commands to the Teensy.</td></tr>
           <tr><td><code>rudra_ps2_lidar.launch.py</code></td><td><code>ps2_uno_to_teensy</code>, <code>ydlidar_ros2_driver_node</code>, and a static TF from <code>base_link</code> to <code>laser</code></td><td>Manual PS2 driving with LiDAR started at the same time, so <code>/scan</code>, the obstacle guard, and the RViz frame tree are available immediately.</td></tr>
+          <tr><td><code>rudra_ps2_lidar_localization.launch.py</code></td><td><code>rudra_ps2_lidar.launch.py</code> plus <code>localization.launch.py</code></td><td>Manual PS2 driving with LiDAR, IMU, wheel odom, EKF fusion, and odom TF all running together.</td></tr>
           <tr><td><code>cmd_vel_to_teensy.launch.py</code></td><td><code>cmd_vel_to_teensy</code></td><td>ROS-driven control path. Subscribes to <code>/cmd_vel</code> and converts those commands into Teensy motor packets.</td></tr>
           <tr><td><code>lidar.launch.py</code></td><td><code>ydlidar_ros2_driver_node</code> and a static TF from <code>base_link</code> to <code>laser</code></td><td>LiDAR-only launch. Starts the YDLIDAR driver and publishes <code>/scan</code> without starting any drive bridge.</td></tr>
           <tr><td><code>lidar_view.launch.py</code></td><td><code>rviz2</code> and a local static TF from <code>base_link</code> to <code>laser</code></td><td>RViz-only launch for viewing the LiDAR scan and obstacle marker. During development from this repo, it prefers the source <code>lidar_obstacle_view.rviz</code> file over the installed copy.</td></tr>
+          <tr><td><code>localization.launch.py</code></td><td><code>robot_localization/ekf_node</code>, <code>odom_tf_broadcaster</code>, and a static TF from <code>base_link</code> to <code>imu_link</code></td><td>Fuses <code>/rudra/wheel_odom</code> with <code>/rudra/imu/raw</code> and publishes TF from fused odometry.</td></tr>
+          <tr><td><code>localization_view.launch.py</code></td><td><code>rviz2</code></td><td>RViz view for raw wheel odom, fused odom, scan, and obstacle marker.</td></tr>
         </tbody>
       </table>
       <p>The script-to-launch mapping is:</p>
       <pre><code>bash scripts/run_ps2_bridge.sh         -> rudra_ps2.launch.py
 bash scripts/run_ps2_lidar_bridge.sh   -> rudra_ps2_lidar.launch.py
+bash scripts/run_ps2_lidar_localization.sh -> rudra_ps2_lidar_localization.launch.py
 bash scripts/run_cmd_vel_bridge.sh     -> cmd_vel_to_teensy.launch.py
 bash scripts/run_lidar.sh              -> lidar.launch.py
-ros2 launch rudra_base_bridge lidar_view.launch.py -> lidar_view.launch.py</code></pre>
+ros2 launch rudra_base_bridge lidar_view.launch.py -> lidar_view.launch.py
+ros2 launch rudra_base_bridge localization_view.launch.py -> localization_view.launch.py</code></pre>
 
       <h3>Manual PS2 Bringup</h3>
       <pre><code>cd /home/rudra/Projects/RUDRAv4
@@ -510,6 +516,14 @@ source install/setup.bash
 bash scripts/run_ps2_lidar_bridge.sh /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0</code></pre>
       <p>This launches the PS2 bridge and the YDLIDAR driver together on the robot. Use this when you want manual controller driving plus active <code>/scan</code>, obstacle guarding, and RViz visibility from Aghora.</p>
 
+      <h3>Manual PS2 plus LiDAR plus Localization Bringup</h3>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_lidar_localization.sh</code></pre>
+      <p>This adds the localization layer on top of the working PS2 and LiDAR bringup. It expects the Teensy to run the IMU/encoder telemetry firmware and publishes <code>/rudra/imu/raw</code>, <code>/rudra/wheel_odom</code>, and <code>/odometry/filtered</code>.</p>
+
       <h3><code>/cmd_vel</code> Bringup</h3>
       <pre><code>cd /home/rudra/Projects/RUDRAv4
 source /opt/ros/lyrical/setup.bash
@@ -519,6 +533,25 @@ bash scripts/run_cmd_vel_bridge.sh</code></pre>
       <div class="callout warn">
         Never run <code>ps2_uno_to_teensy</code> and <code>cmd_vel_to_teensy</code> at the same time. Both try to own the Teensy serial port.
       </div>
+    </section>
+
+    <section id="localization">
+      <h2>IMU and Wheel Odom</h2>
+      <p>RUDRAv4 keeps the existing PS2 and Sabertooth control chain, then layers localization on top. The Teensy still accepts <code>D,left,right,enable</code> commands, but the localization firmware also emits plain serial telemetry for IMU and odometry:</p>
+      <pre><code>IMU,ax,ay,az,gx,gy,gz
+ODOM,x,y,theta,linear_x,angular_z,left_vel,right_vel</code></pre>
+      <p>The ROS 2 bridge nodes parse those lines and publish:</p>
+      <ul>
+        <li><code>/rudra/imu/raw</code> as <code>sensor_msgs/msg/Imu</code></li>
+        <li><code>/rudra/wheel_odom</code> as <code>nav_msgs/msg/Odometry</code></li>
+        <li><code>/odometry/filtered</code> from <code>robot_localization</code></li>
+      </ul>
+      <p>The new Teensy firmware sketch is:</p>
+      <pre><code>src/rudra_base_bridge/firmware/teensy_sabertooth_imu_odom_controller/teensy_sabertooth_imu_odom_controller.ino</code></pre>
+      <p>This sketch intentionally does not add PID yet. It preserves the current open-loop drive path so IMU and encoder bringup can be validated first. Add PID later only if open-loop wheel tracking proves too inconsistent.</p>
+      <p>The EKF configuration lives in:</p>
+      <pre><code>src/rudra_base_bridge/config/localization_ekf.yaml</code></pre>
+      <p>It currently fuses wheel odom with IMU angular velocity. That is enough to bring up odom, TF, and RViz while keeping the hardware and software stack understandable.</p>
     </section>
 
     <section id="aghora">
@@ -533,8 +566,10 @@ ros2 launch rudra_base_bridge lidar_view.launch.py</code></pre>
       <p>This launch starts RViz only plus a local static TF from <code>base_link</code> to <code>laser</code>. It does not start the LiDAR driver and it does not start a drive bridge. It is a viewer, not a robot bringup launch.</p>
       <p>The wrapper scripts in <code>scripts/</code> default to <code>ROS_DOMAIN_ID=42</code> and <code>ROS_LOCALHOST_ONLY=0</code> if those variables are unset. That matches the current Rudra and Aghora setup and avoids the silent no-data case caused by mismatched DDS domains.</p>
       <p>If you prefer manual RViz setup, use fixed frame <code>base_link</code>, add a <code>LaserScan</code> display for <code>/scan</code>, and add a <code>Marker</code> display for <code>/rudra/obstacle_guard_marker</code>.</p>
+      <p>For odometry and localization work, use <code>bash scripts/view_localization.sh</code> or <code>ros2 launch rudra_base_bridge localization_view.launch.py</code>. In that view, the fixed frame should be <code>odom</code>. The raw encoder odom appears on <code>/rudra/wheel_odom</code> and the fused estimate appears on <code>/odometry/filtered</code>.</p>
       <p>The scan can appear with only the LiDAR driver running. The obstacle marker appears only when a bridge node such as <code>ps2_uno_to_teensy</code> or <code>cmd_vel_to_teensy</code> is running, because that is what creates the obstacle-guard publisher.</p>
       <p>If RViz shows no scan even though the topic exists, set the LaserScan display reliability policy to <code>Best Effort</code>.</p>
+      <p>You can view odom in RViz immediately. A map is a later layer. Once <code>odom -&gt; base_link</code>, <code>base_link -&gt; laser</code>, and LiDAR scan data are stable, add a SLAM package to generate <code>map -&gt; odom</code>.</p>
     </section>
 
     <section id="guard">
@@ -590,6 +625,9 @@ ros2 node list</code></pre>
           <tr><td><code>/rudra/ps2_raw</code> changing</td><td>The Uno and controller are reaching ROS.</td></tr>
           <tr><td><code>/rudra/drive_cmd</code> printing <code>D,...</code></td><td>The ROS2 bridge is sending commands to the Teensy.</td></tr>
           <tr><td><code>/rudra/teensy_ack</code> printing <code>ACK,...</code></td><td>The Teensy is receiving and replying.</td></tr>
+          <tr><td><code>/rudra/imu/raw</code> publishing</td><td>The Teensy IMU telemetry is reaching ROS 2.</td></tr>
+          <tr><td><code>/rudra/wheel_odom</code> publishing</td><td>Encoder odometry is reaching ROS 2.</td></tr>
+          <tr><td><code>/odometry/filtered</code> publishing</td><td>The EKF is alive and fusing wheel odom with IMU.</td></tr>
           <tr><td><code>/scan</code> publishing</td><td>The YDLIDAR driver is healthy enough for the obstacle guard and RViz.</td></tr>
           <tr><td><code>/rudra/obstacle_guard</code></td><td>The obstacle filter is reporting its current state.</td></tr>
         </tbody>
@@ -607,6 +645,8 @@ ros2 node list</code></pre>
           <tr><td>LiDAR prints warnings but no data yet</td><td>Wait at least 15 seconds. The first scan can be delayed during startup.</td></tr>
           <tr><td>LiDAR spins after shutdown</td><td>The motor still has USB power. Unplug the USB cable or turn off the USB hub port.</td></tr>
           <tr><td>RViz sees the topic but shows nothing</td><td>Set fixed frame to <code>base_link</code>, keep LaserScan reliability at <code>Best Effort</code>, and confirm the static TF publisher is still running.</td></tr>
+          <tr><td>No <code>/rudra/imu/raw</code> or <code>/rudra/wheel_odom</code></td><td>Flash the IMU/odom Teensy firmware, then watch <code>/rudra/teensy_ack</code> for both command acks and telemetry lines.</td></tr>
+          <tr><td>No <code>/odometry/filtered</code></td><td>Confirm <code>robot_localization</code> is installed, run <code>bash scripts/run_ps2_lidar_localization.sh</code>, and check the EKF node logs for frame or topic-name mistakes.</td></tr>
           <tr><td>PS2 bridge starts but there is no motion</td><td>Check <code>/rudra/ps2_raw</code>, press <code>SELECT</code> to enable manual drive, then watch <code>/rudra/drive_cmd</code> and <code>/rudra/teensy_ack</code>.</td></tr>
           <tr><td>Robot ignores START guard toggle</td><td>The Uno likely is not running the updated seven-field packet firmware. Reflash the Uno sketch.</td></tr>
           <tr><td>Teensy is silent</td><td>Check the Teensy port in <code>rudra_v4_hardware.yaml</code>, confirm the Teensy firmware is running, and make sure no other process owns the port.</td></tr>

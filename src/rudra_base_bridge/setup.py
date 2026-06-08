@@ -22,6 +22,10 @@ setup(
             'share/' + package_name + '/firmware/teensy_sabertooth_serial_controller',
             glob('firmware/teensy_sabertooth_serial_controller/*'),
         ),
+        (
+            'share/' + package_name + '/firmware/teensy_sabertooth_imu_odom_controller',
+            glob('firmware/teensy_sabertooth_imu_odom_controller/*'),
+        ),
     ],
     install_requires=['setuptools', 'pyserial'],
     zip_safe=True,
@@ -35,6 +39,7 @@ setup(
             'ps2_uno_to_teensy = rudra_base_bridge.ps2_uno_to_teensy:main',
             'cmd_vel_to_teensy = rudra_base_bridge.cmd_vel_to_teensy:main',
             'list_serial_ports = rudra_base_bridge.serial_port_list:main',
+            'odom_tf_broadcaster = rudra_base_bridge.odom_tf_broadcaster:main',
         ],
     },
 )

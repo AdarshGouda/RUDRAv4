@@ -20,6 +20,12 @@ ps2_uno_to_teensy:
     max_linear_speed_mps: 1.20
     max_angular_speed_radps: 2.50
     send_stop_when_disabled: true
+    publish_teensy_telemetry: true
+    imu_topic: "/rudra/imu/raw"
+    wheel_odom_topic: "/rudra/wheel_odom"
+    imu_frame_id: "imu_link"
+    wheel_odom_frame_id: "odom"
+    wheel_odom_child_frame_id: "base_link"
 
     # Runtime obstacle guard control from PS2.
     # Updated Uno firmware publishes a latched guard field toggled by START.
@@ -55,6 +61,12 @@ cmd_vel_to_teensy:
     cmd_timeout_sec: 0.30
     timer_period_sec: 0.02
     enable_on_nonzero_cmd: true
+    publish_teensy_telemetry: true
+    imu_topic: "/rudra/imu/raw"
+    wheel_odom_topic: "/rudra/wheel_odom"
+    imu_frame_id: "imu_link"
+    wheel_odom_frame_id: "odom"
+    wheel_odom_child_frame_id: "base_link"
 
     # LiDAR obstacle guard, based on RUDRAv3 navigation's LaserScan topic.
     # Forward drive slows below obstacle_slow_distance_m and stops below

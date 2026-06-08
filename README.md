@@ -79,9 +79,12 @@ Those wrappers call the new launch files directly:
 
 - `rudra_ps2.launch.py` for the normal PS2-only bringup.
 - `rudra_ps2_lidar.launch.py` for the PS2 plus LiDAR obstacle bringup.
+- `rudra_ps2_lidar_localization.launch.py` for PS2, LiDAR, IMU/wheel odom, and EKF fusion together.
 - `cmd_vel_to_teensy.launch.py` for ROS `/cmd_vel` control to the Teensy.
 - `lidar.launch.py` for LiDAR-only `/scan` publishing.
 - `lidar_view.launch.py` for RViz-only viewing of `/scan` and the obstacle marker.
+- `localization.launch.py` for EKF fusion of `/rudra/wheel_odom` and `/rudra/imu/raw`.
+- `localization_view.launch.py` for RViz viewing of raw wheel odom, fused odom, and scan data.
 
 On Aghora, you can visualize `/scan` in RViz with the packaged view launch:
 
@@ -206,6 +209,83 @@ Use this later for keyboard teleop, joystick teleop, SLAM, or Nav2. Do not run i
 bash scripts/run_cmd_vel_bridge.sh
 ```
 
+## IMU and wheel odometry
+
+This branch adds a localization layer without removing the current PS2 and
+LiDAR obstacle workflow. The ROS bridge nodes can now publish:
+
+- `/rudra/imu/raw` from Teensy IMU telemetry
+- `/rudra/wheel_odom` from Teensy encoder odometry telemetry
+- `/odometry/filtered` from `robot_localization`
+
+The existing simple Teensy firmware still works for drive-only operation, but
+it does not publish IMU or odom telemetry. To bring up localization, flash the
+new firmware:
+
+```text
+src/rudra_base_bridge/firmware/teensy_sabertooth_imu_odom_controller/teensy_sabertooth_imu_odom_controller.ino
+```
+
+That sketch preserves the same input command format:
+
+```text
+D,left,right,enable
+```
+
+and adds plain serial telemetry back to the NUC:
+
+```text
+IMU,ax,ay,az,gx,gy,gz
+ODOM,x,y,theta,linear_x,angular_z,left_vel,right_vel
+```
+
+Bring up PS2, LiDAR, and localization together:
+
+```bash
+bash scripts/run_ps2_lidar_localization.sh
+```
+
+Open the localization RViz view:
+
+```bash
+bash scripts/view_localization.sh
+```
+
+In RViz:
+
+- fixed frame should be `odom`
+- add an `Odometry` display for `/rudra/wheel_odom` to inspect raw encoder odom
+- add an `Odometry` display for `/odometry/filtered` to inspect fused odom
+- keep the `LaserScan` display on `/scan` to see LiDAR in the odom frame
+
+The current fusion setup uses wheel odom plus IMU angular velocity. That is the
+right first bringup step for this robot. PID is not required to publish odom or
+run the EKF, so it is left out unless the open-loop drivetrain proves too
+inconsistent in testing.
+
+## Odom and maps
+
+You can use odom in RViz immediately once the Teensy telemetry firmware and
+`robot_localization` are running. The fused odom gives you a continuous local
+frame for the robot pose, but it is not a map.
+
+A map comes later from a SLAM or localization package such as SLAM Toolbox.
+The normal frame chain is:
+
+```text
+map -> odom -> base_link -> laser
+map -> odom -> base_link -> imu_link
+```
+
+This branch brings up the middle part first:
+
+- `odom -> base_link` from fused odometry
+- `base_link -> laser` from the LiDAR static transform
+- `base_link -> imu_link` from the IMU static transform
+
+Once that is stable, the next layer is SLAM with LiDAR to create and maintain
+`map -> odom`.
+
 ## Firmware
 
 Plain-serial firmware examples are included:
@@ -213,6 +293,7 @@ Plain-serial firmware examples are included:
 ```text
 src/rudra_base_bridge/firmware/uno_ps2_plain_serial/uno_ps2_plain_serial.ino
 src/rudra_base_bridge/firmware/teensy_sabertooth_serial_controller/teensy_sabertooth_serial_controller.ino
+src/rudra_base_bridge/firmware/teensy_sabertooth_imu_odom_controller/teensy_sabertooth_imu_odom_controller.ino
 ```
 
 These replace the old ROS1 `rosserial` path for ROS2 bringup. The Uno only publishes PS2 readings to the NUC. The Teensy is the only board that sends packet serial to the Sabertooths.

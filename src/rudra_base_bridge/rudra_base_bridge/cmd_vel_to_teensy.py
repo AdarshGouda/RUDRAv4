@@ -12,6 +12,7 @@ from std_msgs.msg import String
 
 from .obstacle_guard import LidarObstacleGuard
 from .serial_utils import clamp, clamp_int, LineSerial
+from .teensy_telemetry import TeensyTelemetryBridge
 
 
 class CmdVelToTeensy(Node):
@@ -41,6 +42,7 @@ class CmdVelToTeensy(Node):
 
         self.teensy = LineSerial(self.teensy_port, self.baud)
         self.obstacle_guard = LidarObstacleGuard(self)
+        self.teensy_telemetry = TeensyTelemetryBridge(self)
         self.last_cmd_time = 0.0
         self.last_cmd = Twist()
         self.last_sent_stop = 0.0
@@ -107,9 +109,10 @@ class CmdVelToTeensy(Node):
             left, right, enable = self.cmd_to_sabertooth(self.last_cmd)
             self.send_drive(left, right, enable)
 
-        for ack in self.teensy.drain_available(max_lines=5):
+        for ack in self.teensy.drain_available(max_lines=12):
             if ack:
-                self.ack_pub.publish(String(data=ack))
+                if not self.teensy_telemetry.handle_line(ack):
+                    self.ack_pub.publish(String(data=ack))
 
 
 def main(args: Optional[list[str]] = None) -> None:
@@ -120,9 +123,11 @@ def main(args: Optional[list[str]] = None) -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        node.send_stop()
+        if rclpy.ok():
+            node.send_stop()
         node.destroy_node()
-        rclpy.shutdown()
+        if rclpy.ok():
+            rclpy.shutdown()
 
 
 if __name__ == '__main__':

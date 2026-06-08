@@ -1,0 +1,114 @@
+Panels:
+  - Class: rviz_common/Displays
+    Name: Displays
+  - Class: rviz_common/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz_default_plugins/Grid
+      Name: Ground Grid
+      Enabled: true
+      Alpha: 0.5
+      Cell Size: 0.5
+      Color: 160; 160; 164
+      Line Style:
+        Value: Lines
+        Line Width: 0.03
+      Plane: XY
+      Plane Cell Count: 20
+      Reference Frame: <Fixed Frame>
+      Value: true
+    - Class: rviz_default_plugins/LaserScan
+      Name: LiDAR Scan
+      Enabled: true
+      Alpha: 1
+      Color: 0; 255; 170
+      Color Transformer: FlatColor
+      Channel Name: intensity
+      Position Transformer: XYZ
+      Style: Flat Squares
+      Size (m): 0.08
+      Topic:
+        Value: /scan
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Use Fixed Frame: true
+      Value: true
+    - Class: rviz_default_plugins/Odometry
+      Name: Wheel Odom
+      Enabled: true
+      Topic:
+        Value: /rudra/wheel_odom
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+      Shape:
+        Value: Arrow
+      Color: 66; 133; 244
+      Keep: 100
+      Position Tolerance: 0.1
+      Angle Tolerance: 0.1
+      Value: true
+    - Class: rviz_default_plugins/Odometry
+      Name: Filtered Odom
+      Enabled: true
+      Topic:
+        Value: /odometry/filtered
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Reliable
+        Durability Policy: Volatile
+      Shape:
+        Value: Axes
+      Color: 255; 165; 0
+      Keep: 100
+      Position Tolerance: 0.05
+      Angle Tolerance: 0.05
+      Value: true
+    - Class: rviz_default_plugins/Marker
+      Name: Obstacle Guard Marker
+      Enabled: true
+      Namespaces:
+        rudra_obstacle_guard: true
+      Topic:
+        Value: /rudra/obstacle_guard_marker
+        Depth: 5
+        History Policy: Keep Last
+        Reliability Policy: Best Effort
+        Durability Policy: Volatile
+      Value: true
+  Enabled: true
+  Global Options:
+    Background Color: 18; 22; 28
+    Fixed Frame: odom
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz_default_plugins/Interact
+    - Class: rviz_default_plugins/MoveCamera
+    - Class: rviz_default_plugins/Select
+    - Class: rviz_default_plugins/FocusCamera
+    - Class: rviz_default_plugins/Measure
+  Transformation:
+    Current:
+      Class: rviz_default_plugins/TF
+  Value: true
+  Views:
+    Current:
+      Class: rviz_default_plugins/Orbit
+      Distance: 4
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Name: Current View
+      Pitch: 1.1
+      Target Frame: base_link
+      Yaw: 0
+Window Geometry:
+  Height: 900
+  Width: 1280
