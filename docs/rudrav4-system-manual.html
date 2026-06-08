@@ -231,7 +231,7 @@
         <p class="lede">Use this file first. It replaces the older overlapping startup, SSH, and bringup note pages.</p>
       </div>
       <div class="stamp">
-        Updated: 2026-06-07<br>
+        Updated: 2026-06-08<br>
         Robot NUC: <code>rudra</code><br>
         Laptop: <code>aghora</code>
       </div>
@@ -248,6 +248,8 @@
         <li><a href="#build">Build and Source</a></li>
         <li><a href="#ydlidar">YDLIDAR Setup</a></li>
         <li><a href="#launch">Launch Modes</a></li>
+        <li><a href="#navigation">Navigation and RViz Recipe</a></li>
+        <li><a href="#dcdc">DCDC-USB NUC Power</a></li>
         <li><a href="#aghora">RViz on Aghora</a></li>
         <li><a href="#guard">Obstacle Guard</a></li>
         <li><a href="#topics">Useful Topics and Checks</a></li>
@@ -464,7 +466,7 @@ bash scripts/stop_lidar.sh</code></pre>
 
     <section id="launch">
       <h2>Launch Modes</h2>
-      <p>There are now four practical robot-side control modes. Use only one bridge that owns the Teensy at a time.</p>
+      <p>There are now five practical robot-side launch modes. Use only one bridge that owns the Teensy at a time.</p>
       <table>
         <thead>
           <tr><th>Mode</th><th>Use When</th><th>Command</th></tr>
@@ -473,6 +475,7 @@ bash scripts/stop_lidar.sh</code></pre>
           <tr><td>Manual PS2 only</td><td>Normal base-control bringup without LiDAR filtering.</td><td><code>bash scripts/run_ps2_bridge.sh</code></td></tr>
           <tr><td>Manual PS2 with LiDAR obstacle guard</td><td>Drive from the controller while keeping <code>/scan</code> and low-level forward filtering active.</td><td><code>bash scripts/run_ps2_lidar_bridge.sh /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0</code></td></tr>
           <tr><td>Manual PS2 with LiDAR and localization</td><td>Drive from the controller while LiDAR, wheel odom, IMU telemetry, and fused odom all run together.</td><td><code>bash scripts/run_ps2_lidar_localization.sh</code></td></tr>
+          <tr><td>Manual PS2 with LiDAR, localization, and NUC power monitor</td><td>Same as the localization bringup, plus DCDC-USB battery/output voltage diagnostics.</td><td><code>ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true</code></td></tr>
           <tr><td><code>/cmd_vel</code> to Teensy</td><td>Keyboard teleop, autonomy, SLAM, Nav2, or anything else publishing <code>/cmd_vel</code>.</td><td><code>bash scripts/run_cmd_vel_bridge.sh</code></td></tr>
         </tbody>
       </table>
@@ -484,8 +487,9 @@ bash scripts/stop_lidar.sh</code></pre>
         <tbody>
           <tr><td><code>rudra_ps2.launch.py</code></td><td><code>ps2_uno_to_teensy</code></td><td>Manual PS2 driving only. Reads the Uno packet, publishes status topics, and sends final motor commands to the Teensy.</td></tr>
           <tr><td><code>rudra_ps2_lidar.launch.py</code></td><td><code>ps2_uno_to_teensy</code>, <code>ydlidar_ros2_driver_node</code>, and a static TF from <code>base_link</code> to <code>laser</code></td><td>Manual PS2 driving with LiDAR started at the same time, so <code>/scan</code>, the obstacle guard, and the RViz frame tree are available immediately.</td></tr>
-          <tr><td><code>rudra_ps2_lidar_localization.launch.py</code></td><td><code>rudra_ps2_lidar.launch.py</code> plus <code>localization.launch.py</code></td><td>Manual PS2 driving with LiDAR, IMU, wheel odom, EKF fusion, and odom TF all running together.</td></tr>
+          <tr><td><code>rudra_ps2_lidar_localization.launch.py</code></td><td><code>rudra_ps2_lidar.launch.py</code> plus <code>localization.launch.py</code>, and optionally <code>dcdc_usb_monitor</code></td><td>Manual PS2 driving with LiDAR, IMU, wheel odom, EKF fusion, odom TF, and optional NUC power diagnostics all running together.</td></tr>
           <tr><td><code>cmd_vel_to_teensy.launch.py</code></td><td><code>cmd_vel_to_teensy</code></td><td>ROS-driven control path. Subscribes to <code>/cmd_vel</code> and converts those commands into Teensy motor packets.</td></tr>
+          <tr><td><code>dcdc_usb_monitor.launch.py</code></td><td><code>dcdc_usb_monitor</code></td><td>NUC power monitor. Publishes <code>/rudra/nuc_battery</code> and <code>/diagnostics</code> from the Mini-Box DCDC-USB.</td></tr>
           <tr><td><code>lidar.launch.py</code></td><td><code>ydlidar_ros2_driver_node</code> and a static TF from <code>base_link</code> to <code>laser</code></td><td>LiDAR-only launch. Starts the YDLIDAR driver and publishes <code>/scan</code> without starting any drive bridge.</td></tr>
           <tr><td><code>lidar_view.launch.py</code></td><td><code>rviz2</code> and a local static TF from <code>base_link</code> to <code>laser</code></td><td>RViz-only launch for viewing the LiDAR scan and obstacle marker. During development from this repo, it prefers the source <code>lidar_obstacle_view.rviz</code> file over the installed copy.</td></tr>
           <tr><td><code>localization.launch.py</code></td><td><code>robot_localization/ekf_node</code>, <code>odom_tf_broadcaster</code>, and a static TF from <code>base_link</code> to <code>imu_link</code></td><td>Fuses <code>/rudra/wheel_odom</code> with <code>/rudra/imu/raw</code> and publishes TF from fused odometry.</td></tr>
@@ -498,6 +502,7 @@ bash scripts/run_ps2_lidar_bridge.sh   -> rudra_ps2_lidar.launch.py
 bash scripts/run_ps2_lidar_localization.sh -> rudra_ps2_lidar_localization.launch.py
 bash scripts/run_cmd_vel_bridge.sh     -> cmd_vel_to_teensy.launch.py
 bash scripts/run_lidar.sh              -> lidar.launch.py
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py -> dcdc_usb_monitor.launch.py
 ros2 launch rudra_base_bridge lidar_view.launch.py -> lidar_view.launch.py
 ros2 launch rudra_base_bridge localization_view.launch.py -> localization_view.launch.py</code></pre>
 
@@ -524,6 +529,14 @@ source install/setup.bash
 bash scripts/run_ps2_lidar_localization.sh</code></pre>
       <p>This adds the localization layer on top of the working PS2 and LiDAR bringup. It expects the Teensy to run the IMU/encoder telemetry firmware and publishes <code>/rudra/imu/raw</code>, <code>/rudra/wheel_odom</code>, and <code>/odometry/filtered</code>.</p>
 
+      <h3>Manual PS2 plus LiDAR plus Localization plus DCDC</h3>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true</code></pre>
+      <p>This is the current full robot-side bringup when the DCDC-USB is powering the NUC. It starts manual drive, LiDAR, obstacle guard, IMU/wheel odom localization, and NUC power diagnostics together.</p>
+
       <h3><code>/cmd_vel</code> Bringup</h3>
       <pre><code>cd /home/rudra/Projects/RUDRAv4
 source /opt/ros/lyrical/setup.bash
@@ -533,6 +546,59 @@ bash scripts/run_cmd_vel_bridge.sh</code></pre>
       <div class="callout warn">
         Never run <code>ps2_uno_to_teensy</code> and <code>cmd_vel_to_teensy</code> at the same time. Both try to own the Teensy serial port.
       </div>
+    </section>
+
+    <section id="navigation">
+      <h2>Navigation and RViz Recipe</h2>
+      <p>The current checked-in stack brings up LiDAR, obstacle guarding, wheel odom, IMU, EKF fused odometry, TF, and RViz views. It does not yet include a full Nav2 map-navigation launch. For Nav2 or SLAM work, use the localization bringup first, then start the package that publishes maps, goals, or <code>/cmd_vel</code>.</p>
+
+      <h3>Robot Terminal on <code>rudra</code></h3>
+      <p>Use this for the full manual navigation sensor stack with DCDC power monitoring:</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true</code></pre>
+      <p>Use this for the same stack without the DCDC monitor:</p>
+      <pre><code>bash scripts/run_ps2_lidar_localization.sh</code></pre>
+
+      <h3>RViz Terminal on <code>aghora</code></h3>
+      <p>Use the localization RViz view when checking odom, EKF, TF, and scan alignment:</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+source install/setup.bash
+ros2 launch rudra_base_bridge localization_view.launch.py</code></pre>
+      <p>Use the LiDAR-only RViz view when all you need is <code>/scan</code> and the obstacle marker:</p>
+      <pre><code>bash scripts/view_lidar.sh</code></pre>
+
+      <h3>ROS-Driven Motion</h3>
+      <p>When a navigation package is ready to command the robot, stop the PS2 bridge and start the <code>/cmd_vel</code> bridge instead:</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+bash scripts/run_cmd_vel_bridge.sh</code></pre>
+      <p>Then start the planner, teleop, SLAM, or Nav2 node that publishes <code>/cmd_vel</code>. The LiDAR driver and localization must still be running somewhere in the system for autonomous navigation.</p>
+    </section>
+
+    <section id="dcdc">
+      <h2>DCDC-USB NUC Power</h2>
+      <p>The Mini-Box DCDC-USB powers only the NUC. It is not part of the Sabertooth motor power path. Keep the DCDC USB cable plugged into the NUC so ROS can read battery and output-voltage status.</p>
+      <pre><code>4S LiPo -> DCDC-USB input
+DCDC-USB output -> NUC DC input
+DCDC-USB USB -> NUC USB port</code></pre>
+      <p>Install and test the utility:</p>
+      <pre><code>cd /home/rudra/Projects/RUDRAv4
+bash scripts/install_dcdc_usb_tool.sh
+dcdc-usb -a</code></pre>
+      <p>Run only the monitor:</p>
+      <pre><code>source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py</code></pre>
+      <p>The monitor publishes <code>/rudra/nuc_battery</code> and <code>/diagnostics</code>. The NUC is rated for <code>19 V +/- 10%</code>, so <code>rudra_v4_hardware.yaml</code> warns below <code>17.1 V</code> or above <code>20.9 V</code> on the DCDC output. It also warns on low 4S LiPo input and sudden input voltage sag.</p>
+      <p>Detailed power notes live in:</p>
+      <pre><code>docs/dcdc_usb_nuc_power.md</code></pre>
     </section>
 
     <section id="localization">
@@ -615,6 +681,12 @@ ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: tru
 ros2 topic echo /rudra/drive_cmd
 ros2 topic echo /rudra/teensy_ack
 ros2 topic echo /rudra/obstacle_guard
+ros2 topic echo /rudra/imu/raw
+ros2 topic echo /rudra/wheel_odom
+ros2 topic echo /odometry/filtered
+ros2 topic echo /tf
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
 ros2 topic echo --once /scan
 ros2 node list</code></pre>
       <table>
@@ -628,8 +700,11 @@ ros2 node list</code></pre>
           <tr><td><code>/rudra/imu/raw</code> publishing</td><td>The Teensy IMU telemetry is reaching ROS 2.</td></tr>
           <tr><td><code>/rudra/wheel_odom</code> publishing</td><td>Encoder odometry is reaching ROS 2.</td></tr>
           <tr><td><code>/odometry/filtered</code> publishing</td><td>The EKF is alive and fusing wheel odom with IMU.</td></tr>
+          <tr><td><code>/tf</code> publishing odom transforms</td><td>RViz has the transform tree needed to display the robot, scan, and odom in one frame.</td></tr>
           <tr><td><code>/scan</code> publishing</td><td>The YDLIDAR driver is healthy enough for the obstacle guard and RViz.</td></tr>
           <tr><td><code>/rudra/obstacle_guard</code></td><td>The obstacle filter is reporting its current state.</td></tr>
+          <tr><td><code>/rudra/nuc_battery</code> publishing</td><td>The DCDC-USB monitor is reading the NUC power rail.</td></tr>
+          <tr><td><code>/diagnostics</code> publishing <code>rudra_nuc_dcdc</code></td><td>The DCDC monitor is reporting LiPo voltage, DCDC output range, and sag warnings.</td></tr>
         </tbody>
       </table>
     </section>
