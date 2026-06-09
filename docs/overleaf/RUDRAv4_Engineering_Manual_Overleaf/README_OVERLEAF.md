@@ -16,14 +16,13 @@ manual.sty
 chapters/*.tex
 appendices/*.tex
 figures/photos/*.png
-code/*
 ```
 
-The manual is chapter-split, uses TikZ/PGFPlots for diagrams and plots, and includes selected source/config snapshots from the current RUDRAv4 workspace.
+The manual is chapter-split and uses TikZ/PGFPlots for diagrams and plots. It intentionally does not duplicate implementation code from `src/`; the RUDRAv4 GitHub repository is the source of truth for code, firmware, launch files, configuration, and scripts.
 
 Recommended Overleaf setting: Menu -> Compiler -> XeLaTeX.
 
 
 Revision note: this package includes Ubuntu setup for `rudra` and `aghora`, dedicated hardware chapters for the NUC7i7BNH, Mini-Box DCDC-USB, Sabertooth drivers, Teensy/Uno/PS2, MPU6050, customized YDLIDAR stack, robot body, batteries, BOM, current launch operations, localization/TF theory, and the staged navigation/autonomy roadmap.
 
-When the workspace changes, regenerate the `code/` snapshots from the live repository before exporting the Overleaf package. The live repository remains authoritative; the snapshots are for review, traceability, and offline reading.
+When the workspace changes, update the implementation in the repository first. Then update this manual only when behavior, launch procedure, interfaces, theory, diagnostics, safety limits, or wiring assumptions change. If this PDF is being tied to a specific release, update `\RepoBranch` in `manual.sty` to the matching branch, tag, or commit reference.
