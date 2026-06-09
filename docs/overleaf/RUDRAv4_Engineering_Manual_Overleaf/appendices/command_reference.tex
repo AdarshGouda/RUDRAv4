@@ -1,0 +1,75 @@
+\chapter{Command Reference}
+
+\section{Build and source}
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+bash scripts/install_deps.sh
+source /opt/ros/lyrical/setup.bash
+colcon build --packages-select rudra_base_bridge
+source install/setup.bash
+\end{lstlisting}
+
+With LiDAR overlay:
+
+\begin{lstlisting}[language=bash]
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash
+\end{lstlisting}
+
+\section{Serial devices}
+
+\begin{lstlisting}[language=bash]
+bash scripts/list_serial.sh
+ls -l /dev/serial/by-id/
+\end{lstlisting}
+
+\section{Launch commands}
+
+\begin{lstlisting}[language=bash]
+bash scripts/run_ps2_bridge.sh
+bash scripts/run_ps2_lidar_bridge.sh
+bash scripts/run_ps2_lidar_localization.sh
+bash scripts/run_cmd_vel_bridge.sh
+bash scripts/run_lidar.sh
+bash scripts/view_lidar.sh
+bash scripts/view_localization.sh
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
+\end{lstlisting}
+
+\section{Topic monitors}
+
+\begin{lstlisting}[language=bash]
+ros2 node list
+ros2 topic list
+ros2 topic echo /rudra/ps2_raw
+ros2 topic echo /rudra/drive_cmd
+ros2 topic echo /rudra/teensy_ack
+ros2 topic echo /rudra/obstacle_guard
+ros2 topic echo --once /scan
+ros2 topic echo --once /rudra/imu/raw
+ros2 topic echo --once /rudra/wheel_odom
+ros2 topic echo --once /odometry/filtered
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
+\end{lstlisting}
+
+\section{Obstacle guard enable and disable}
+
+\begin{lstlisting}[language=bash]
+ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: false}"
+ros2 topic pub --once /rudra/obstacle_guard_enable std_msgs/msg/Bool "{data: true}"
+\end{lstlisting}
+
+\section{LiDAR shutdown}
+
+\begin{lstlisting}[language=bash]
+bash scripts/stop_lidar.sh
+\end{lstlisting}
+
+\section{NUC shutdown}
+
+\begin{lstlisting}[language=bash]
+sudo shutdown now
+\end{lstlisting}

@@ -1,0 +1,38 @@
+\chapter*{References and Source Basis}
+\addcontentsline{toc}{chapter}{References and Source Basis}
+
+This manual was generated from the attached RUDRAv4 workspace snapshot and the current RUDRAv4 HTML system manual. The package includes selected source snapshots in the \filep{code/} directory so the document can compile on Overleaf without access to the original repository.
+
+\section*{Primary internal source basis}
+\begin{itemize}
+  \item RUDRAv4 workspace snapshot: \filep{/home/rudra/Projects/RUDRAv4} in the attached ZIP.
+  \item Existing manual: \filep{docs/rudrav4-system-manual.html}.
+  \item Legacy article assets: \filep{docs/assets/}.
+  \item Legacy long-form article: \emph{Invoking the RUDRA}, included in the workspace as a PDF export.
+\end{itemize}
+
+\section*{External engineering concepts referenced}
+\begin{itemize}
+  \item ROS 2 graph concepts: nodes, topics, messages, parameters, launch, overlays, and DDS domains.
+  \item Mobile robot frame convention: \cmd{map}, \cmd{odom}, \cmd{base_link}, sensor frames, and dynamic/static transforms.
+  \item Differential-drive kinematics and encoder odometry.
+  \item Extended Kalman filtering for fusing odometry and IMU measurements.
+  \item LiPo voltage thresholding and DCDC monitor diagnostics.
+\end{itemize}
+
+
+\section*{Additional sources used in this revision}
+\begin{itemize}
+  \item RUDRAv4 NUC setup HTML supplied with this revision: \filep{source_material/nuc_rudra_ros2_setup.html}.
+  \item RUDRAv4 DCDC-USB NUC power monitor notes: \filep{source_material/dcdc_usb_nuc_power.md}.
+  \item Mini-Box DCDC-USB quick installation guide and Linux utility source: \url{https://resources.mini-box.com/online/PWR-DCDC-USB/PWR-DCDC-USB-manual.pdf} and \url{https://github.com/mini-box/dcdc-usb}.
+  \item ROS 2 Lyrical installation documentation: \url{https://docs.ros.org/en/lyrical/Installation.html} and \url{https://docs.ros.org/en/lyrical/Installation/Ubuntu-Install-Debs.html}.
+  \item Intel NUC7i7BNH technical product specification and Intel product support page.
+  \item Dimension Engineering Sabertooth 2x12 product page, quick-start guide, DIP-switch wizard, and user guide.
+  \item PJRC Teensy 4.1 product page and Teensy Linux rules/tooling pages.
+  \item TDK/InvenSense MPU-6050 product and datasheet references.
+  \item YDLIDAR G2 product/datasheet references and current RUDRAv4 \filep{ydlidar_g2b.yaml} configuration.
+  \item Lynxmotion/RobotShop A4WD1 chassis specification pages.
+\end{itemize}
+
+The external concepts are treated as engineering background. The concrete paths, package names, topic names, launch commands, firmware packets, and parameter values are drawn from the RUDRAv4 workspace snapshot.

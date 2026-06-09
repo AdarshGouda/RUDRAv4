@@ -1,0 +1,112 @@
+
+\chapter{LiDAR Scan and Obstacle Avoidance}
+\label{chap:ydlidar-custom}
+
+RUDRAv4 uses a YDLIDAR G2-class 360 degree laser scanner.  The current robot does not use the manufacturer's driver as a black box.  It keeps the YDLidar-SDK and \pkg{ydlidar_ros2_driver} in an external workspace and launches the driver through RUDRAv4-owned launch and parameter files.  That makes the LiDAR setup reproducible and keeps the robot's frame names, serial port, baud rate, and obstacle-guard behavior under version control.
+
+\section{Why the driver is external}
+The LiDAR driver depends on the vendor SDK.  Installing that SDK globally makes future rebuilds harder because the dependency is outside the workspace.  RUDRAv4 instead builds the SDK into \filep{/home/rudra/ros2_ws/install/YDLidar-SDK} and builds \pkg{ydlidar_ros2_driver} against that prefix.
+
+\begin{lstlisting}[language=bash,caption={External LiDAR workspace overlay order.}]
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash
+\end{lstlisting}
+
+\section{RUDRAv4 customization points}
+The robot-owned files are:
+
+\begin{lstlisting}[caption={LiDAR files owned by RUDRAv4.}]
+src/rudra_base_bridge/launch/lidar.launch.py
+src/rudra_base_bridge/config/ydlidar_g2b.yaml
+scripts/run_lidar.sh
+scripts/stop_lidar.sh
+scripts/run_ps2_lidar_bridge.sh
+scripts/run_ps2_lidar_localization.sh
+\end{lstlisting}
+
+The parameter file freezes the working robot settings:
+
+\begin{lstlisting}[caption={Current RUDRAv4 YDLIDAR settings.}]
+port: /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+frame_id: laser
+baudrate: 128000
+lidar_type: 1
+device_type: 0
+sample_rate: 5
+fixed_resolution: true
+reversion: true
+inverted: true
+auto_reconnect: true
+intensity: true
+intensity_bit: 8
+support_motor_dtr: false
+range_min: 0.28
+range_max: 16.0
+frequency: 10.0
+\end{lstlisting}
+
+The exact baud rate and scan parameters should stay in the robot config rather than in a command typed by memory.
+
+\section{LiDAR in the robot graph}
+The LiDAR publishes \topic{/scan} in the \cmd{laser} frame.  The RUDRAv4 launch also publishes a static transform from \cmd{base_link} to \cmd{laser}.  This makes the scan visible in RViz and usable by the obstacle guard.
+
+\begin{center}
+\resizebox{0.98\linewidth}{!}{%
+\begin{tikzpicture}[node distance=8mm and 11mm]
+  \node[rudraHw] (lidar) {YDLIDAR G2B\\USB CP2102};
+  \node[rudraBlock, right=of lidar] (driver) {\pkg{ydlidar_ros2_driver_node}};
+  \node[rudraTopic, right=of driver] (scan) {\topic{/scan}\\\cmd{LaserScan}};
+  \node[rudraBlock, below=of scan] (guard) {Obstacle guard\\front sector filter};
+  \node[rudraTopic, left=of guard] (status) {\topic{/rudra/obstacle_guard}};
+  \node[rudraTopic, right=of guard] (cmd) {filtered motor\\command};
+  \draw[rudraArrow] (lidar) -- (driver);
+  \draw[rudraArrow] (driver) -- (scan);
+  \draw[rudraArrow] (scan) -- (guard);
+  \draw[rudraArrow] (guard) -- (status);
+  \draw[rudraArrow] (guard) -- (cmd);
+\end{tikzpicture}}
+\end{center}
+
+\section{Known startup behavior}
+The existing system manual captures practical LiDAR behavior that matters during launch: the first valid \topic{/scan} can take 10 to 15 seconds, startup checksum warnings can appear before scans begin, and the driver can print repeated fixed-point warnings while still publishing valid scans.  Therefore, the primary health signal is not a clean console; it is whether \topic{/scan} publishes with frame \cmd{laser}.
+
+\begin{lstlisting}[language=bash,caption={LiDAR bring-up and validation.}]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+bash scripts/run_lidar.sh /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+
+# In another terminal
+ros2 topic echo --once /scan
+ros2 topic hz /scan
+\end{lstlisting}
+
+\section{Obstacle guard mathematics}
+The guard examines a frontal angular sector and computes the minimum valid range in that sector.  If the scan angle for beam \(i\) is \(\alpha_i\), then the forward sector is:
+\begin{equation}
+\left|\alpha_i\right| \leq \frac{\alpha_{front}}{2}.
+\end{equation}
+
+Let \(r_{min}\) be the minimum finite range in that sector.  The command scale for forward motion is conceptually:
+\begin{equation}
+s(r_{min}) =
+\begin{cases}
+0, & r_{min} \leq r_{stop},\\
+\dfrac{r_{min}-r_{stop}}{r_{slow}-r_{stop}}, & r_{stop}<r_{min}<r_{slow},\\
+1, & r_{min}\geq r_{slow}.
+\end{cases}
+\end{equation}
+
+Current RUDRAv4 defaults are \(\alpha_{front}=70^\circ\), \(r_{stop}=\SI{0.45}{m}\), and \(r_{slow}=\SI{1.00}{m}\).  Reverse and turn-in-place commands are allowed so the robot can back away from an obstacle.
+
+\section{Debugging no scan}
+\begin{enumerate}
+  \item Run \cmd{bash scripts/list_serial.sh} and verify the CP2102 by-id path.
+  \item Source the external LiDAR workspace before the RUDRAv4 workspace.
+  \item Launch \cmd{lidar.launch.py} without any drive bridge.
+  \item Wait at least 15 seconds before declaring failure.
+  \item Echo \topic{/scan}; then check RViz with fixed frame \cmd{base_link} and LaserScan reliability set to Best Effort.
+  \item If the LiDAR still spins after shutdown, remember that the motor is still powered by USB; cut USB power or unplug it.
+\end{enumerate}

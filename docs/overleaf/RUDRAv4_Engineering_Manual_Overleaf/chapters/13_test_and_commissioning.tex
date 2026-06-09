@@ -1,0 +1,143 @@
+\chapter{Testing and Commissioning}
+
+\section{Commissioning philosophy}
+
+Commission RUDRA by proving each boundary before proving the whole robot. A system launch that starts every node is not proof that the robot is safe. The correct sequence is serial identity, firmware packets, drive packets, LiDAR scan, obstacle guard, telemetry, localization, then integrated motion.
+
+\section{Stage 0: static inspection}
+
+\begin{enumerate}
+  \item Inspect all power wiring before connecting batteries.
+  \item Confirm NUC power rail output with a multimeter.
+  \item Confirm Sabertooth battery wiring and polarity.
+  \item Confirm Teensy TX1 to Sabertooth S1 shared packet serial connection.
+  \item Confirm Uno PS2 receiver pins CLK=9, CMD=7, ATT=6, DAT=8.
+  \item Confirm LiDAR USB adapter is connected and mechanically secure.
+\end{enumerate}
+
+\section{Stage 1: serial identity}
+
+Run:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+bash scripts/list_serial.sh
+\end{lstlisting}
+
+Expected devices are Arduino Uno, Teensy, and CP2102 LiDAR adapter. Edit \filep{src/rudra_base_bridge/config/rudra_v4_hardware.yaml} if the persistent paths differ.
+
+\section{Stage 2: firmware packet tests}
+
+With motor power removed:
+
+\begin{itemize}
+  \item Open Uno serial and verify \cmd{J,...} output.
+  \item Toggle SELECT and START and verify the correct packet fields change.
+  \item Open Teensy serial and send \cmd{D,0,0,0}; verify \cmd{ACK,0,0,0}.
+  \item Send \cmd{D,10,10,1}; verify ACK, then stop.
+\end{itemize}
+
+Do not move to powered motor tests until serial behavior is boring.
+
+\section{Stage 3: ROS bridge tests}
+
+Run the PS2 bridge with wheels lifted:
+
+\begin{lstlisting}[language=bash]
+bash scripts/run_ps2_bridge.sh
+\end{lstlisting}
+
+In another terminal:
+
+\begin{lstlisting}[language=bash]
+ros2 topic echo /rudra/ps2_raw
+ros2 topic echo /rudra/drive_cmd
+ros2 topic echo /rudra/teensy_ack
+\end{lstlisting}
+
+Confirm that enabling manual mode through SELECT is required before nonzero drive commands are sent.
+
+\section{Stage 4: motor direction test}
+
+With the robot lifted and motor power connected, use very small commands. The expected behavior is:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Command intent & Expected motion\\
+\midrule
+small forward throttle & all wheels drive forward\\
+small reverse throttle & all wheels drive reverse\\
+small left turn & right side faster than left side\\
+small right turn & left side faster than right side\\
+spin & left and right sides opposite signs\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+If one motor is reversed, fix polarity or motor mapping before changing ROS signs. If an entire side is reversed, investigate the side mapping between Teensy, Sabertooth, and motor wiring.
+
+\section{Stage 5: LiDAR and guard test}
+
+Run:
+
+\begin{lstlisting}[language=bash]
+bash scripts/run_ps2_lidar_bridge.sh
+\end{lstlisting}
+
+After scans begin, echo:
+
+\begin{lstlisting}[language=bash]
+ros2 topic echo /rudra/obstacle_guard
+\end{lstlisting}
+
+Place an object in front of the robot. The state should move from clear to slowing and then blocked as the object moves inside the stop distance. Reverse and turning should remain available.
+
+\section{Stage 6: telemetry and localization}
+
+Flash the telemetry Teensy firmware, then run:
+
+\begin{lstlisting}[language=bash]
+bash scripts/run_ps2_lidar_localization.sh
+\end{lstlisting}
+
+Confirm:
+
+\begin{lstlisting}[language=bash]
+ros2 topic echo --once /rudra/imu/raw
+ros2 topic echo --once /rudra/wheel_odom
+ros2 topic echo --once /odometry/filtered
+\end{lstlisting}
+
+Move the robot slowly and verify that odometry direction and yaw sign match physical motion. If forward motion decreases x, or left rotation decreases yaw when the frame convention expects the opposite, fix signs before attempting SLAM.
+
+\section{Stage 7: power monitor test}
+
+Run:
+
+\begin{lstlisting}[language=bash]
+dcdc-usb -a
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
+\end{lstlisting}
+
+Compare reported input and output voltage to a multimeter. Validate thresholds before enabling shutdown.
+
+\section{Acceptance matrix}
+
+\begin{longtable}{p{0.32\linewidth}p{0.24\linewidth}p{0.34\linewidth}}
+\toprule
+Requirement & Method & Pass criterion\\
+\midrule
+Serial devices stable & \cmd{list_serial.sh} & Uno, Teensy, LiDAR paths visible by-id.\\
+Manual enable works & SELECT toggle & Drive commands remain zero until enabled.\\
+Command timeout works & Stop bridge or unplug Uno & Teensy receives or locally applies zero command within timeout.\\
+Obstacle scaling works & Move object in front cone & Guard state and forward scale change with distance.\\
+Reverse escape works & Obstacle blocked + reverse command & Reverse or turn command still allowed.\\
+Telemetry publishes & Run telemetry firmware & IMU and wheel odom topics publish.\\
+EKF publishes & Localization launch & \topic{/odometry/filtered} alive with plausible values.\\
+Power diagnostics publish & DCDC monitor & \topic{/rudra/nuc_battery} and diagnostics update.\\
+Remote RViz works & Aghora viewer & Scan, marker, and odom visible in correct frame.\\
+\bottomrule
+\end{longtable}

@@ -1,0 +1,130 @@
+\chapter{Localization, Odometry, and TF}
+
+\section{The frame problem}
+
+A mobile robot must report not only sensor values but also where those values live. RUDRA uses a standard planar frame chain:
+
+\begin{equation}
+\cmd{odom} \rightarrow \cmd{base_link} \rightarrow \cmd{laser}
+\end{equation}
+
+and:
+
+\begin{equation}
+\cmd{base_link} \rightarrow \cmd{imu_link}.
+\end{equation}
+
+\cmd{base_link} is the robot body frame. \cmd{laser} is the LiDAR frame. \cmd{imu_link} is the IMU frame. \cmd{odom} is a locally continuous frame used for odometry. A future SLAM layer can add:
+
+\begin{equation}
+\cmd{map} \rightarrow \cmd{odom}.
+\end{equation}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[node distance=11mm]
+\node[rudraTopic] (map) {\cmd{map}\\future SLAM};
+\node[rudraTopic,right=of map] (odom) {\cmd{odom}};
+\node[rudraTopic,right=of odom] (base) {\cmd{base_link}};
+\node[rudraTopic,above right=of base] (laser) {\cmd{laser}};
+\node[rudraTopic,below right=of base] (imu) {\cmd{imu_link}};
+\draw[rudraDashed] (map) -- node[above=0.5]{SLAM} (odom);
+\draw[rudraArrow] (odom) -- node[above=0.5]{dynamic} (base);
+\draw[rudraArrow] (base) -- node[above,sloped]{static} (laser);
+\draw[rudraArrow] (base) -- node[below,sloped]{static} (imu);
+\end{tikzpicture}}
+\caption{RUDRAv4 TF tree. The map frame is not required for base bringup; it is introduced when SLAM is stable.}
+\end{figure}
+
+\section{Telemetry sources}
+
+The localization layer expects the Teensy telemetry firmware to publish:
+
+\begin{lstlisting}[language={}]
+IMU,ax,ay,az,gx,gy,gz
+ODOM,x,y,theta,linear_x,angular_z,left_vel,right_vel
+\end{lstlisting}
+
+The ROS bridge converts these into:
+
+\begin{itemize}
+  \item \topic{/rudra/imu/raw} as \cmd{sensor_msgs/msg/Imu}
+  \item \topic{/rudra/wheel_odom} as \cmd{nav_msgs/msg/Odometry}
+\end{itemize}
+
+The IMU message intentionally leaves orientation unset by setting \cmd{orientation_covariance[0] = -1.0}. That tells downstream consumers that orientation is not available from this message.
+
+\section{Wheel odometry from encoder telemetry}
+
+Wheel odometry is the robot's short-term estimate based on wheel motion. It is locally smooth but can drift because of wheel slip, floor irregularity, unequal wheel radius, encoder count errors, and unmodeled skid-steer effects. The mathematical basis was introduced in \cref{eq:pose-derivative}. For implementation, the robot integrates:
+
+\begin{align}
+x_k &= x_{k-1} + v_k\Delta t\cos\theta_k,\\
+y_k &= y_{k-1} + v_k\Delta t\sin\theta_k,\\
+\theta_k &= \theta_{k-1} + \Omega_k\Delta t.
+\end{align}
+
+This produces the \topic{/rudra/wheel_odom} message.
+
+\section{IMU telemetry}
+
+The MPU6050 provides acceleration and gyro readings. Gyro yaw rate is useful for correcting short-term yaw motion, but integrating gyro alone drifts over time. Acceleration is noisy and includes gravity components. Therefore, raw IMU is useful but should not be trusted alone for global pose.
+
+\section{EKF fusion}
+
+The ROS-side EKF is configured in:
+
+\begin{lstlisting}[language=bash]
+src/rudra_base_bridge/config/localization_ekf.yaml
+\end{lstlisting}
+
+The current filter runs in two-dimensional mode and uses:
+
+\begin{itemize}
+  \item \topic{/rudra/wheel_odom} for x, y, yaw, forward velocity, and yaw rate components.
+  \item \topic{/rudra/imu/raw} for yaw-rate component only.
+\end{itemize}
+
+A simplified EKF model can be written as:
+
+\begin{align}
+\mathbf{x}_k &= f(\mathbf{x}_{k-1},\mathbf{u}_{k-1}) + \mathbf{w}_k,\\
+\mathbf{z}_k &= h(\mathbf{x}_k) + \mathbf{v}_k,
+\end{align}
+
+where \(\mathbf{x}\) is the state estimate, \(\mathbf{z}\) is the measurement vector, \(\mathbf{w}\) is process noise, and \(\mathbf{v}\) is measurement noise. RUDRA's practical EKF value is not mathematical complexity; it is the disciplined combination of wheel and IMU signals into one consistent odometry output.
+
+\section{Why publish TF outside the EKF}
+
+The current EKF config sets \param{publish_tf: false}. The separate \pkg{odom_tf_broadcaster} subscribes to \topic{/odometry/filtered} and broadcasts \cmd{odom -> base_link}. This separation makes TF behavior explicit and easier to debug during development.
+
+\section{Launch}
+
+Full manual, LiDAR, localization stack:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_lidar_localization.sh
+\end{lstlisting}
+
+RViz localization view:
+
+\begin{lstlisting}[language=bash]
+bash scripts/view_localization.sh
+\end{lstlisting}
+
+In the localization view, fixed frame should be \cmd{odom}. Confirm the following:
+
+\begin{itemize}
+  \item raw wheel odom: \topic{/rudra/wheel_odom}
+  \item fused odom: \topic{/odometry/filtered}
+  \item scan: \topic{/scan}
+  \item TF tree: \cmd{odom -> base_link -> laser} and \cmd{base_link -> imu_link}
+\end{itemize}
+
+\begin{operatorbox}{Localization bringup rule}
+Do not add SLAM until odom, scan, and TF are stable. SLAM debugging is almost impossible if the base odometry or frame tree is already wrong.
+\end{operatorbox}

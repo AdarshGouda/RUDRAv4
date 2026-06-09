@@ -1,0 +1,125 @@
+\chapter{Firmware Architecture}
+
+\section{Why firmware is split}
+
+RUDRAv4 has two microcontroller firmware roles. The Uno is a controller reader. The Teensy is a drive interface. This separation prevents PS2 controller library issues from interfering with Sabertooth packet serial timing, and it avoids forcing the Uno to handle tasks beyond its capacity.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.94\linewidth}{!}{\begin{tikzpicture}[node distance=9mm and 12mm, every node/.append style={font=\small}]
+\node[rudraHw,text width=37mm] (uno) {Uno firmware\\\filep{uno_ps2_plain_serial.ino}};
+\node[rudraBlock,text width=28mm,right=of uno] (nuc) {NUC ROS bridge};
+\node[rudraHw,text width=32mm,right=of nuc] (teensy) {Teensy firmware\\drive + telemetry};
+\node[rudraHw,text width=27mm,right=of teensy] (sabers) {Sabertooth\\drivers};
+\draw[rudraArrow] (uno) -- node[above=0.75,align=center]{\scriptsize \cmd{J,select,ry,rx,ly,lx,guard}} (nuc);
+\draw[rudraArrow] (nuc) -- node[above=0.75,align=center]{\scriptsize \cmd{D,left,right,enable}} (teensy);
+\draw[rudraArrow] (teensy) -- node[above=0.75]{\scriptsize packet serial} (sabers);
+\draw[rudraDashed] (teensy.south) to[bend right=-20] node[below,align=center]{\scriptsize \cmd{ACK}\\\cmd{IMU}\\\cmd{ODOM}} (nuc.south);
+\end{tikzpicture}}
+\caption{Firmware data contracts. The NUC is the translation layer between joystick packets, ROS topics, and drive packets.}
+\end{figure}
+
+\section{Uno PS2 firmware}
+
+The Uno sketch is:
+
+\begin{lstlisting}[language=bash]
+src/rudra_base_bridge/firmware/uno_ps2_plain_serial/uno_ps2_plain_serial.ino
+\end{lstlisting}
+
+Its job is deliberately small:
+
+\begin{itemize}
+  \item configure the PS2 controller interface on pins CLK=9, CMD=7, ATT=6, DAT=8;
+  \item poll the controller at roughly 20 Hz;
+  \item latch manual mode on SELECT rising edge;
+  \item latch obstacle guard enable on START rising edge;
+  \item print one compact serial line per loop.
+\end{itemize}
+
+The emitted line is:
+
+\begin{lstlisting}[language={}]
+J,select,ry,rx,ly,lx,guard
+\end{lstlisting}
+
+The fields are raw and intentionally simple. The Uno does not know the robot kinematics. It does not know obstacle distance. It does not know Sabertooth addresses. It simply exposes operator intent to the NUC.
+
+\section{Teensy base-drive firmware}
+
+The plain drive firmware is:
+
+\begin{lstlisting}[language=bash]
+src/rudra_base_bridge/firmware/teensy_sabertooth_serial_controller/teensy_sabertooth_serial_controller.ino
+\end{lstlisting}
+
+It accepts:
+
+\begin{lstlisting}[language={}]
+D,left,right,enable
+\end{lstlisting}
+
+where \cmd{left} and \cmd{right} are clamped to \([-127,127]\) and \cmd{enable} is 0 or 1. If enabled, the target commands are ramped toward the requested values. If disabled or timed out, both targets go to zero.
+
+The ramp is:
+
+\begin{equation}
+u_{k+1}=u_k+\mathrm{sat}(u_{target}-u_k,-s,s),
+\end{equation}
+
+where \(s\) is the ramp step. The current sketch uses \cmd{RAMP_STEP=6}, \cmd{CONTROL_PERIOD_MS=20}, and \cmd{COMMAND_TIMEOUT_MS=300}. Disabled ramp-down uses twice the step to stop faster.
+
+\section{Teensy IMU and odometry firmware}
+
+The telemetry-capable firmware is:
+
+\begin{lstlisting}[language=bash]
+src/rudra_base_bridge/firmware/teensy_sabertooth_imu_odom_controller/teensy_sabertooth_imu_odom_controller.ino
+\end{lstlisting}
+
+It preserves the same drive command input but adds:
+
+\begin{lstlisting}[language={}]
+IMU,ax,ay,az,gx,gy,gz
+ODOM,x,y,theta,linear_x,angular_z,left_vel,right_vel
+\end{lstlisting}
+
+This is important. The telemetry firmware is backward-compatible with the ROS bridge because the NUC already drains Teensy serial lines and routes telemetry lines to \topic{/rudra/imu_raw} and \topic{/rudra/wheel_odom}. Non-telemetry lines remain available as \topic{/rudra/teensy_ack}.
+
+\section{IMU scale and encoder scale}
+
+The MPU6050 constants in the current firmware are:
+
+\begin{align}
+\mathrm{ACCEL\_SCALE} &= \frac{1}{16384},\\
+\mathrm{GYRO\_SCALE} &= \frac{1}{131},\\
+g &= 9.81\ \mathrm{m/s^2},\\
+\mathrm{deg2rad} &= \frac{\pi}{180}.
+\end{align}
+
+The conversion is:
+
+\begin{align}
+a_x &= (\mathrm{raw}_x-b_x)\frac{1}{16384}g,\\
+\omega_z &= (\mathrm{raw}_{gz}-b_{gz})\frac{1}{131}\frac{\pi}{180}.
+\end{align}
+
+Encoder speed follows \cref{eq:encoder-speed}. The telemetry firmware uses four encoder objects: two left and two right. The side speeds are averaged before odometry is integrated.
+
+\section{Firmware validation checklist}
+
+\begin{operatorbox}{Firmware checks before ROS driving}
+\begin{enumerate}
+  \item With motor power removed, open the Uno serial monitor and confirm \cmd{BOOT,PS2_ERROR,0} or investigate any nonzero PS2 error.
+  \item Move sticks and verify \cmd{J,...} changes.
+  \item Press SELECT and confirm the second field toggles 0/1.
+  \item Press START and confirm the seventh field toggles 0/1.
+  \item With Teensy connected and motor power removed, send \cmd{D,0,0,0} and confirm \cmd{ACK,0,0,0}.
+  \item Send small commands such as \cmd{D,10,10,1} only with wheels lifted.
+  \item Confirm timeout stops commands when the NUC stops sending.
+\end{enumerate}
+\end{operatorbox}
+
+\section{When to reflash}
+
+Reflash the Uno only when the controller packet is wrong, PS2 library behavior is wrong, or the START guard latch is missing. Reflash the Teensy when \cmd{D,...} is not accepted, \cmd{ACK,...} is missing, Sabertooth outputs are wrong, encoder telemetry is wrong, or IMU telemetry is required. Avoid reflashing both boards at once during troubleshooting. Change one boundary at a time.

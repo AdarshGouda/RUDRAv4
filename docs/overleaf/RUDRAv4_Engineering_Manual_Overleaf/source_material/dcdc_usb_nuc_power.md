@@ -1,0 +1,214 @@
+# DCDC-USB NUC Power Monitor
+
+RUDRAv4 can power the NUC from a dedicated 4S LiPo through the Mini-Box
+DCDC-USB buck-boost converter, while keeping ROS aware of that power rail.
+
+The first integration is intentionally monitor-first:
+
+- the DCDC-USB jumper or vendor configuration controls the output voltage
+- ROS reads the DCDC-USB over USB through the Mini-Box Linux utility
+- ROS publishes battery state and diagnostics
+- automatic NUC shutdown is available, but disabled by default
+
+## Electrical Plan
+
+```text
+4S LiPo, 14.8 V nominal / 16.8 V full
+  -> DCDC-USB input
+  -> regulated DCDC-USB output
+  -> NUC DC input
+
+DCDC-USB mini USB
+  -> NUC USB
+  -> ROS dcdc_usb_monitor node
+```
+
+The Mini-Box DCDC-USB product page
+<https://www.mini-box.com/DCDC-USB> lists the converter as a 100 W buck-boost
+unit with 6-34 V input, programmable 5-24 V output, 12 V default output, and USB
+configuration/status support.
+
+The RUDRA NUC is rated for `19 V +/- 10%`, so its expected input range is
+approximately `17.1 V` to `20.9 V`.
+
+## Install The DCDC-USB Linux Utility
+
+The ROS node wraps the vendor `dcdc-usb -a` command so you can debug the same
+path outside ROS.
+
+```bash
+cd /home/rudra/Projects/RUDRAv4
+bash scripts/install_dcdc_usb_tool.sh
+```
+
+The installer also writes `/etc/udev/rules.d/99-dcdc-usb.rules`. Unplug and
+reconnect the DCDC-USB USB cable after the installer completes so Linux applies
+the new device permissions.
+
+Check the board manually:
+
+```bash
+dcdc-usb -a
+```
+
+Expected fields include:
+
+```text
+input voltage: 15.42
+output voltage: 12.06
+mode: 0 (dumb)
+output enable: On
+```
+
+If the board is connected only by USB, output may look like this instead:
+
+```text
+input voltage: 0.00
+output voltage: 0.000000
+output enable: Off
+output voltage: 17.76
+```
+
+That means the NUC can talk to the DCDC-USB over USB, but the DCDC input is not
+powered by the LiPo yet. The final `output voltage: 17.76` is the programmed
+target voltage, not a live powered output reading.
+
+If `dcdc-usb -a` reports `Cannot claim interface 0`, reconnect the USB cable
+first. If it still fails, run `sudo dcdc-usb -a` once to distinguish a
+permissions issue from a kernel-driver claim issue.
+
+## What This Does On RUDRA
+
+The DCDC-USB does not control the drivetrain. It is a dedicated NUC power rail:
+
+```text
+drive battery / Sabertooths / Teensy
+  -> keep existing RUDRA motor power wiring
+
+4S LiPo
+  -> DCDC-USB input
+  -> DCDC-USB regulated output
+  -> NUC DC input
+
+DCDC-USB USB
+  -> NUC USB port
+  -> ROS /rudra/nuc_battery and /diagnostics
+```
+
+Use it in three stages:
+
+1. USB-only bench test: verify `dcdc-usb -a` works. Seeing `input voltage: 0.00`
+   is normal if the LiPo is not connected.
+2. Powered bench test without the NUC load: connect the 4S LiPo to DCDC input
+   and check the live output with a multimeter before plugging the output into
+   the NUC.
+3. Robot integration: power the NUC from the DCDC output, keep the USB cable
+   connected for telemetry, and start `dcdc_usb_monitor`.
+
+Before stage 3, confirm the DCDC output with a multimeter. Your board has
+reported live output around `19.4 V` and programmed output around `19.6 V`,
+which sits inside the NUC's `17.1-20.9 V` tolerance band.
+
+## Run The ROS Monitor
+
+Standalone:
+
+```bash
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
+```
+
+With PS2, LiDAR, IMU/wheel odom, and localization:
+
+```bash
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true
+```
+
+Useful monitors:
+
+```bash
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
+```
+
+The node publishes:
+
+- `/rudra/nuc_battery` as `sensor_msgs/BatteryState`
+- `/diagnostics` as `diagnostic_msgs/DiagnosticArray`
+
+## Configuration
+
+Defaults live in:
+
+```text
+src/rudra_base_bridge/config/rudra_v4_hardware.yaml
+```
+
+Important parameters:
+
+```yaml
+dcdc_usb_monitor:
+  ros__parameters:
+    dcdc_usb_command: "dcdc-usb -a"
+    cell_count: 4
+    full_voltage: 16.8
+    warning_voltage: 14.4
+    critical_voltage: 13.2
+    shutdown_voltage: 12.8
+    expected_output_min_voltage: 17.1
+    expected_output_max_voltage: 20.9
+    input_sag_window_sec: 10.0
+    input_sag_warning_voltage: 0.8
+    shutdown_enabled: false
+    shutdown_hold_sec: 5.0
+```
+
+For a 4S LiPo:
+
+- 16.8 V is full charge
+- 14.8 V is nominal
+- 14.4 V is a conservative warning point
+- 13.2 V is 3.3 V/cell and treated as critical
+- 12.8 V is reserved for optional shutdown testing, not enabled by default
+
+The monitor estimates state-of-charge from pack voltage linearly. That is only
+a rough dashboard hint, because LiPo voltage sag depends on load and battery
+condition.
+
+## Warnings
+
+The DCDC-USB status available through this utility includes voltages and status
+flags, but not output current. That means the node cannot calculate watts
+directly.
+
+It does publish useful warnings through `/diagnostics`:
+
+- low LiPo input at or below `warning_voltage`
+- critical LiPo input at or below `critical_voltage`
+- DCDC output below `expected_output_min_voltage`
+- DCDC output above `expected_output_max_voltage`
+- programmed output outside the expected range
+- output disabled while the monitor is running
+- sudden input voltage sag over `input_sag_window_sec`
+
+Input sag is the best available hint that NUC load is higher than usual, the
+LiPo is weak, or wiring resistance is too high. Treat it as a prompt to inspect
+the power path, not as a precise power measurement.
+
+## Optional Graceful Shutdown
+
+Leave shutdown disabled until the DCDC readings match a multimeter and the NUC
+load has been tested.
+
+After validation, enable:
+
+```yaml
+shutdown_enabled: true
+shutdown_voltage: 12.8
+shutdown_hold_sec: 5.0
+shutdown_command: "sudo shutdown -h now"
+```
+
+The node will run the shutdown command only once after input voltage remains at
+or below the shutdown threshold for `shutdown_hold_sec`.

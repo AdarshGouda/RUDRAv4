@@ -1,0 +1,131 @@
+\chapter{Power and Electrical Architecture}
+
+\section{Power separation}
+
+RUDRAv4 should be treated as two electrical systems sharing the robot chassis:
+
+\begin{enumerate}
+  \item \textbf{Drive power}: motor battery, Sabertooth motor drivers, and drive motors.
+  \item \textbf{Compute power}: 4S LiPo, DCDC-USB, regulated NUC input, USB telemetry connection, and ROS diagnostics.
+\end{enumerate}
+
+The NUC rail must not be confused with the Sabertooth motor rail. The DCDC-USB integration is for powering and monitoring the NUC. It is not a drivetrain controller.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.85\linewidth}{!}{\begin{tikzpicture}[node distance=9mm and 12mm]
+\node[rudraHw] (lipo) {4S LiPo\\16.8 V full\\14.8 V nominal};
+\node[rudraHw,right=of lipo] (dcdc) {Mini-Box\\DCDC-USB};
+\node[rudraHw,right=of dcdc] (nuc) {Intel NUC\\19 V input};
+\node[rudraBlock,below=of dcdc] (mon) {\pkg{dcdc_usb_monitor}};
+\node[rudraTopic,below=of mon] (topics) {\topic{/rudra/nuc_battery}\\\topic{/diagnostics}};
+\node[rudraHw,above=of dcdc] (drive) {Separate drive battery\\to Sabertooths};
+\draw[rudraArrow] (lipo) -- node[above=0.5]{DC in} (dcdc);
+\draw[rudraArrow] (dcdc) -- node[above=0.5]{regulated output} (nuc);
+\draw[rudraDashed] (dcdc) -- node[right]{USB status} (mon);
+\draw[rudraDashed] (mon) -- (topics);
+\draw[rudraArrow] (drive) -- ++(3,0) node[right]{motors};
+\end{tikzpicture}}
+\caption{DCDC-USB is the NUC rail monitor and regulator; drivetrain power remains a separate safety-critical path.}
+\end{figure}
+
+\section{NUC voltage tolerance}
+
+The NUC rail is treated as a 19 V input with a \(\pm 10\%\) acceptable range:
+
+\begin{align}
+V_{min} &= 19(1-0.10)=17.1\ \text{V},\\
+V_{max} &= 19(1+0.10)=20.9\ \text{V}.
+\end{align}
+
+The workspace configuration uses:
+
+\begin{lstlisting}[language={},caption={DCDC output thresholds in hardware YAML}]
+expected_output_min_voltage: 17.1
+expected_output_max_voltage: 20.9
+\end{lstlisting}
+
+Before plugging the DCDC output into the NUC, measure the live output with a multimeter. A USB-only DCDC status reading can show a programmed target voltage even when the input/output power stage is not live.
+
+\section{4S LiPo thresholds}
+
+The current monitor configuration assumes a 4S LiPo pack. The important values are:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+State & Pack voltage & Average cell voltage\\
+\midrule
+Full & 16.8 V & 4.20 V/cell\\
+Nominal & 14.8 V & 3.70 V/cell\\
+Warning & 14.4 V & 3.60 V/cell\\
+Critical & 13.2 V & 3.30 V/cell\\
+Optional shutdown threshold & 12.8 V & 3.20 V/cell\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The monitor estimates battery percentage linearly from input voltage:
+
+\begin{equation}
+\mathrm{SOC}_{est}=\mathrm{sat}\left(\frac{V_{in}-V_{empty}}{V_{full}-V_{empty}},0,1\right).
+\end{equation}
+
+This is a dashboard estimate, not a coulomb counter. LiPo voltage depends on load, temperature, internal resistance, and recovery after load removal.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}
+\begin{axis}[
+width=0.78\linewidth,height=6cm,
+xlabel={4S LiPo input voltage (V)},ylabel={Estimated percentage},
+xmin=12.6,xmax=17.0,ymin=0,ymax=1.05,grid=both,
+legend pos=south east]
+\addplot[thick,rudraTeal,domain=13.2:16.8,samples=2]{(x-13.2)/(16.8-13.2)};
+\addplot[thick,rudraAmber,dashed] coordinates {(14.4,0) (14.4,1)};
+\addplot[thick,black,dashed] coordinates {(13.2,0) (13.2,1)};
+\legend{linear estimate, warning, critical}
+\end{axis}
+\end{tikzpicture}}
+\caption{Linear state-of-charge estimate used for the NUC DCDC input monitor.}
+\end{figure}
+
+\section{DCDC-USB monitor behavior}
+
+The ROS node \pkg{dcdc_usb_monitor} wraps the vendor command:
+
+\begin{lstlisting}[language=bash]
+dcdc-usb -a
+\end{lstlisting}
+
+It parses voltage and status fields, then publishes:
+
+\begin{itemize}
+  \item \topic{/rudra/nuc_battery} as \cmd{sensor_msgs/msg/BatteryState}
+  \item \topic{/diagnostics} as \cmd{diagnostic_msgs/msg/DiagnosticArray}
+\end{itemize}
+
+The utility does not provide current, so the node cannot compute NUC power. Instead, it monitors input voltage, output voltage, programmed output, output enable state, and input voltage sag. Sag is a useful warning that the pack is weak, wiring resistance is high, or NUC load is unusually high.
+
+\section{Monitor-first integration}
+
+Automatic shutdown is available but intentionally disabled by default:
+
+\begin{lstlisting}[language={}]
+shutdown_enabled: false
+shutdown_voltage: 12.8
+shutdown_hold_sec: 5.0
+shutdown_command: "sudo shutdown -h now"
+\end{lstlisting}
+
+Enable shutdown only after the DCDC readings are verified against a multimeter and the NUC has been tested under realistic load. Premature shutdown automation can be more disruptive than helpful during bringup.
+
+\begin{safetybox}{Power-on validation}
+Validate in three stages: USB-only DCDC communication, powered DCDC output without the NUC load, then NUC-powered integration with ROS monitoring. Do not skip the multimeter check between DCDC and NUC.
+\end{safetybox}
+
+\section{USB power caveats}
+
+The Uno, Teensy, and YDLIDAR are USB devices from the NUC. The LiDAR can continue spinning if the USB port remains powered even after a driver process stops. The software can request driver shutdown, but it cannot remove physical USB power unless the hub or port supports that capability. If the LiDAR continues spinning after shutdown, unplug it or cut power at the USB hub.
+
+The same practical rule applies to motor power: stopping ROS is not the same as disconnecting drive battery power. Keep a physical disconnect accessible during tests.

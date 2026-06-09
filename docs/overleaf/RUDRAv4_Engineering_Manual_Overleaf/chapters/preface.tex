@@ -1,0 +1,16 @@
+\chapter*{Preface}
+\addcontentsline{toc}{chapter}{Preface}
+
+This manual is written as the engineering development successor to the earlier \emph{\href{https://adarsh-gouda.medium.com/rudra-8e643e279d95?postPublishedType=repub}{Invoking the RUDRA}} article. The intent is to capture how \RUDRAv{} works as a complete robot system: why the hardware is split the way it is, how the ROS graph carries commands and telemetry, what equations sit underneath the motion model, how the serial protocols protect the base, how the LiDAR guard filters motion, how localization is staged, and how an operator should launch and monitor the machine.
+
+\RUDRAv{} is a ROS 2 migration and modernization of the original RUDRAv3 rover. The hardware philosophy is preserved: the robot remains a modular differential-drive rover with a PS2 wireless controller, Arduino Uno, Teensy, dual Sabertooth motor drivers, YDLIDAR, and a main onboard computer. The important hardware upgrade for this edition is that the robot computer is an Intel NUC, not a Jetson Nano. The NUC is powered through a Mini-Box DCDC-USB rail, and the present ROS integration monitors that rail instead of attempting to control the converter output from ROS.
+
+\begin{designbox}{How to read this manual}
+Read Chapters~1--3 first if you are new to the system. Read Chapters~4--5 before touching motion or power. Read Chapters~6--11 before changing firmware, serial packets, obstacle behavior, or localization. Chapter~12 is the operator launch chapter. Chapters~13--14 are the commissioning, fault isolation, and roadmap chapters.
+\end{designbox}
+
+The manual is intentionally explicit about commands, file paths, message names, launch files, and parameter names because those details are where robot bringup usually fails. It also contains equations and implementation logic because RUDRA is not just a collection of launch commands. It is a physical machine whose behavior is constrained by kinematics, serial timing, controller deadbands, power integrity, sensor frame alignment, and safety timeouts.
+
+\begin{safetybox}{Safety First}
+Treat every software change as a potential motor command change. Lift the wheels or remove motor power for the first test after any firmware, serial, launch, or bridge modification. The NUC, Uno, Teensy, LiDAR, and ROS graph can be debugged without allowing the drive wheels to move.
+\end{safetybox}

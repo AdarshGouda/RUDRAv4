@@ -1,0 +1,131 @@
+\chapter{Serial Protocols and Safety State Machines}
+
+\section{Why plain serial}
+
+RUDRAv4 uses plain, line-oriented serial at the microcontroller boundary. This is simpler than embedding ROS inside microcontrollers and is easier to test with a serial monitor. Every protocol line is human-readable, newline-terminated, and short.
+
+\section{Uno to NUC protocol}
+
+The Uno emits:
+
+\begin{lstlisting}[language={}]
+J,select,ry,rx,ly,lx,guard
+\end{lstlisting}
+
+\begin{longtable}{p{0.16\linewidth}p{0.18\linewidth}p{0.56\linewidth}}
+\toprule
+Field & Type/range & Meaning\\
+\midrule
+\cmd{J} & literal & Packet type: joystick.\\
+\cmd{select} & 0 or 1 & Latched manual-enable mode toggled by SELECT.\\
+\cmd{ry} & 0--255-ish raw & Right stick Y raw value. Used only for optional guard chord logic if enabled.\\
+\cmd{rx} & 0--255-ish raw & Right stick X raw value. Used for steering.\\
+\cmd{ly} & 0--255-ish raw & Left stick Y raw value. Used for throttle.\\
+\cmd{lx} & 0--255-ish raw & Left stick X raw value. Published but not presently used for driving.\\
+\cmd{guard} & 0 or 1 & Latched obstacle guard enable toggled by START.\\
+\bottomrule
+\end{longtable}
+
+The bridge accepts both the new seven-field packet and the older six-field form. If the guard field is absent, the bridge cannot update guard state from the controller latch.
+
+\section{NUC to Teensy protocol}
+
+The NUC emits:
+
+\begin{lstlisting}[language={}]
+D,left,right,enable
+\end{lstlisting}
+
+\begin{longtable}{p{0.16\linewidth}p{0.18\linewidth}p{0.56\linewidth}}
+\toprule
+Field & Type/range & Meaning\\
+\midrule
+\cmd{D} & literal & Packet type: drive command.\\
+\cmd{left} & -127 to 127 & Left-side Sabertooth command after joystick mixing or \topic{/cmd_vel} conversion and obstacle filtering.\\
+\cmd{right} & -127 to 127 & Right-side Sabertooth command.\\
+\cmd{enable} & 0 or 1 & If 0, Teensy forces both sides to zero.\\
+\bottomrule
+\end{longtable}
+
+The Teensy replies:
+
+\begin{lstlisting}[language={}]
+ACK,left,right,enable
+ERR,bad_format
+ERR,line_too_long
+BOOT,RUDRA_TEENSY_SABERTOOTH_READY
+BOOT,RUDRA_TEENSY_IMU_ODOM_READY
+\end{lstlisting}
+
+\section{Telemetry protocol}
+
+The telemetry-capable Teensy firmware adds:
+
+\begin{lstlisting}[language={}]
+IMU,ax,ay,az,gx,gy,gz
+ODOM,x,y,theta,linear_x,angular_z,left_vel,right_vel
+\end{lstlisting}
+
+The NUC parser treats these lines as telemetry and does not publish them as acknowledgements. All other Teensy lines go to \topic{/rudra/teensy_ack}. This allows the operator to see both control acknowledgement and richer telemetry without changing the base protocol.
+
+\section{Timing and timeout}
+
+The relevant timing constants are:
+
+\begin{center}
+\begin{tabular}{lcc}
+\toprule
+Loop & Period/timeout & Location\\
+\midrule
+Uno joystick print loop & 50 ms & Uno firmware\\
+ROS bridge timer & 20 ms & Python node parameter\\
+Teensy control loop & 20 ms & Teensy firmware\\
+Teensy telemetry loop & 50 ms & telemetry firmware\\
+Command timeout & 300 ms & ROS bridge and Teensy firmware\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The timeout design is layered. If the Uno disappears, the ROS bridge sends stop. If the NUC disappears, the Teensy times out and stops. If \topic{/cmd_vel} disappears, the \topic{/cmd_vel} bridge sends stop. No single software loop should be the only stop mechanism.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[x=1cm,y=1cm]
+\draw[->,thick] (0,0) -- (12,0) node[right]{time};
+\foreach \x/\lab in {0/0,2/100ms,4/200ms,6/300ms,8/400ms,10/500ms} {
+  \draw (\x,0.1) -- (\x,-0.1) node[below]{\lab};
+}
+\draw[rudraTeal,thick] (0,1.2) -- (5.8,1.2);
+\draw[rudraAmber,thick] (5.8,1.2) -- (10.5,1.2);
+\node[left] at (0,1.2) {commands};
+\node[above] at (2.8,1.2) {valid \cmd{D,...}};
+\node[above] at (8.2,1.2) {no update};
+\draw[dashed] (6,0) -- (6,1.6);
+\node[above] at (6,1.6) {timeout boundary};
+\draw[rudraArrow] (6,0.65) -- (7.8,0.65) node[right]{Teensy forces target to zero};
+\end{tikzpicture}}
+\caption{Command timeout model. If fresh commands stop for more than about 300 ms, the Teensy disables drive.}
+\end{figure}
+
+\section{State machines}
+
+The joystick bridge has a simple safety state machine:
+
+\begin{enumerate}
+  \item \textbf{No Uno / bad line}: send stop.
+  \item \textbf{Valid packet but manual disabled}: send stop if configured.
+  \item \textbf{Valid packet and enabled}: mix throttle/steering, apply obstacle guard, send drive.
+  \item \textbf{Packet timeout}: send stop and publish zero \topic{/cmd_vel} preview.
+\end{enumerate}
+
+The Teensy state machine is even smaller:
+
+\begin{enumerate}
+  \item Parse latest \cmd{D,...} line.
+  \item Clamp and store targets if enabled, otherwise zero targets.
+  \item If command timeout expires, zero targets.
+  \item Ramp actual commands toward targets.
+  \item Write packet serial outputs to both Sabertooths.
+\end{enumerate}
+
+This split keeps high-level decisions on the NUC while ensuring the motor interface still has a local timeout if the NUC or USB link fails.

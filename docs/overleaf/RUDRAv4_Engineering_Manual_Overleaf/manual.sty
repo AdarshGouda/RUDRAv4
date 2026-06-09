@@ -1,0 +1,106 @@
+% RUDRAv4 Engineering Manual style file
+\ProvidesPackage{manual}
+\RequirePackage[margin=0.85in,headheight=18pt]{geometry}
+\RequirePackage{xcolor}
+\RequirePackage{graphicx}
+\RequirePackage{booktabs}
+\RequirePackage{longtable}
+\RequirePackage{tabularx}
+\RequirePackage{array}
+\RequirePackage{enumitem}
+\RequirePackage{amsmath,amssymb}
+\RequirePackage{siunitx}
+\RequirePackage{tikz}
+\RequirePackage{pgfplots}
+\RequirePackage{tcolorbox}
+\RequirePackage{listings}
+\RequirePackage{caption}
+\RequirePackage{subcaption}
+\RequirePackage{fancyhdr}
+\RequirePackage{hyperref}
+\RequirePackage{cleveref}
+\RequirePackage{titlesec}
+\RequirePackage{etoolbox}
+\RequirePackage{multicol}
+\RequirePackage{pdflscape}
+\usetikzlibrary{arrows.meta,positioning,calc,shapes.geometric,shapes.misc,fit,backgrounds,matrix,decorations.pathreplacing}
+\pgfplotsset{compat=1.18}
+
+\definecolor{rudraInk}{HTML}{17211F}
+\definecolor{rudraMuted}{HTML}{596661}
+\definecolor{rudraTeal}{HTML}{0F766E}
+\definecolor{rudraTealSoft}{HTML}{EAF8F5}
+\definecolor{rudraAmber}{HTML}{A84424}
+\definecolor{rudraAmberSoft}{HTML}{FFF1EA}
+\definecolor{rudraPanel}{HTML}{FBF8F1}
+\definecolor{rudraLine}{HTML}{D7CFBF}
+\definecolor{codeBack}{HTML}{F4EFE5}
+\definecolor{codeFrame}{HTML}{D0C4B0}
+\definecolor{codeText}{HTML}{0F1F1C}
+
+\hypersetup{colorlinks=true,linkcolor=rudraTeal,citecolor=rudraTeal,urlcolor=rudraTeal,pdfauthor={Adarsh Gouda},pdftitle={RUDRAv4 Engineering Development Manual}}
+\setlength{\parskip}{0.45em}
+\setlength{\parindent}{0pt}
+\setlist{itemsep=0.25em,topsep=0.35em}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\footnotesize RUDRAv4 Engineering Development Manual}
+\fancyhead[R]{}
+\fancyfoot[C]{\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries\color{rudraInk}}
+  {\color{rudraTeal}\Large\chaptertitlename\ \thechapter}
+  {0.4em}
+  {\Huge}
+\titleformat{\section}{\normalfont\Large\bfseries\color{rudraInk}}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalfont\large\bfseries\color{rudraInk}}{\thesubsection}{0.6em}{}
+
+\newcommand{\RUDRA}{\textsc{RUDRA}}
+\newcommand{\RUDRAv}{\textsc{RUDRAv4}}
+\newcommand{\ros}{ROS~2}
+\DeclareRobustCommand{\cmd}[1]{\texttt{\detokenize{#1}}}
+\DeclareRobustCommand{\topic}[1]{\texttt{\detokenize{#1}}}
+\DeclareRobustCommand{\pkg}[1]{\texttt{\detokenize{#1}}}
+\DeclareRobustCommand{\filep}[1]{\path{#1}}
+\DeclareRobustCommand{\param}[1]{\texttt{\detokenize{#1}}}
+
+\newcolumntype{Y}{>{\raggedright\arraybackslash}X}
+
+\tcbset{sharp corners=all,boxrule=0.5pt,arc=2mm,left=1.2mm,right=1.2mm,top=1mm,bottom=1mm}
+\newtcolorbox{designbox}[1]{colback=rudraTealSoft,colframe=rudraTeal,title={#1},fonttitle=\bfseries}
+\newtcolorbox{safetybox}[1]{colback=rudraAmberSoft,colframe=rudraAmber,title={#1},fonttitle=\bfseries}
+\newtcolorbox{operatorbox}[1]{colback=rudraPanel,colframe=rudraLine,title={#1},fonttitle=\bfseries}
+
+\lstdefinestyle{rudra}{
+  basicstyle=\ttfamily\small\color{codeText},
+  backgroundcolor=\color{codeBack},
+  frame=single,
+  rulecolor=\color{codeFrame},
+  frameround=ffff,
+  breaklines=true,
+  breakatwhitespace=false,
+  columns=fullflexible,
+  keepspaces=true,
+  showstringspaces=false,
+  tabsize=2,
+  numbers=left,
+  numberstyle=\tiny\color{rudraMuted},
+  xleftmargin=1.5em,
+  framexleftmargin=1.3em,
+  keywordstyle=\color{rudraTeal}\bfseries,
+  commentstyle=\color{rudraMuted}\itshape,
+  stringstyle=\color{rudraAmber}
+}
+\lstset{style=rudra}
+
+\tikzset{
+  rudraBlock/.style={draw=rudraTeal,fill=rudraTealSoft,thick,rounded corners,align=center,minimum height=9mm,inner sep=4pt},
+  rudraHw/.style={draw=rudraAmber,fill=rudraAmberSoft,thick,rounded corners,align=center,minimum height=9mm,inner sep=4pt},
+  rudraTopic/.style={draw=rudraLine,fill=white,thick,rounded corners,align=center,minimum height=7mm,inner sep=3pt},
+  rudraArrow/.style={-{Latex[length=3mm]},thick,draw=rudraInk},
+  rudraDashed/.style={-{Latex[length=3mm]},thick,dashed,draw=rudraMuted}
+}
+
+\newcommand{\chapterquote}[2]{\begin{center}\begin{minipage}{0.86\linewidth}\itshape\large #1\\[0.4em]\normalfont\hfill -- #2\end{minipage}\end{center}\vspace{0.8em}}

@@ -1,0 +1,125 @@
+\chapter{Manual Control Bridge}
+
+\section{Purpose of \pkg{ps2_uno_to_teensy}}
+
+The manual bridge is the normal operator-control path. It connects the PS2 controller chain to the Teensy drive chain and publishes enough ROS topics to make that connection visible.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.94\linewidth}{!}{\begin{tikzpicture}[node distance=9mm and 8mm, every node/.append style={font=\small}]
+\node[rudraHw,text width=24mm] (uno) {Uno serial\\\cmd{J,...}};
+\node[rudraBlock,text width=27mm,right=of uno] (parse) {Parse packet\\\pkg{Ps2Packet}};
+\node[rudraBlock,text width=26mm,right=of parse] (mix) {Axis scale\\deadband\\tank mix};
+\node[rudraBlock,text width=27mm,right=of mix] (guard) {LiDAR guard\\forward filter};
+\node[rudraHw,text width=24mm,right=of guard] (teensy) {Teensy serial\\\cmd{D,...}};
+\node[rudraTopic,text width=28mm,below=of parse] (raw) {\topic{/rudra/ps2_raw}};
+\node[rudraTopic,text width=28mm,below=of mix] (cmdv) {\topic{/cmd_vel} preview};
+\node[rudraTopic,text width=33mm,below=of guard] (stat) {\topic{/rudra/obstacle_guard}};
+\node[rudraTopic,text width=34mm,below=of teensy] (drive) {\topic{/rudra/drive_cmd}\\\topic{/rudra/teensy_ack}};
+\draw[rudraArrow] (uno) -- (parse);
+\draw[rudraArrow] (parse) -- (mix);
+\draw[rudraArrow] (mix) -- (guard);
+\draw[rudraArrow] (guard) -- (teensy);
+\draw[rudraDashed] (parse) -- (raw);
+\draw[rudraDashed] (mix) -- (cmdv);
+\draw[rudraDashed] (guard) -- (stat);
+\draw[rudraDashed] (teensy) -- (drive);
+\end{tikzpicture}}
+\caption{Manual bridge processing pipeline, redrawn with wider nodes and clearer spacing for print readability.}
+\end{figure}
+
+\section{Axis mapping}
+
+The PS2 library returns raw analog values centered around 127. The bridge maps a raw axis value \(a\) into a signed command using:
+
+\begin{align}
+a_c &= a - a_0,\\
+a_s &= \mathrm{round}\left(\frac{a_c}{a_{range}}u_{max}\right),\\
+u &= \begin{cases}
+0, & |a_s|\leq d,\\
+\mathrm{sat}(a_s,-u_{max},u_{max}), & \text{otherwise},
+\end{cases}
+\end{align}
+
+where \(a_0=127\), \(a_{range}=127\), \(u_{max}=127\), and the current deadband is \(d=15\).
+
+The bridge inverts Ly and Rx so the physical controller direction matches the robot convention used during earlier RUDRA development.
+
+\section{Manual mixing}
+
+After scaling, the bridge computes:
+
+\begin{align}
+throttle &= f(Ly),\\
+steering &= f(Rx),\\
+left &= \mathrm{sat}(throttle-steering,-127,127),\\
+right &= \mathrm{sat}(throttle+steering,-127,127).
+\end{align}
+
+SELECT toggles manual enable in the Uno firmware. When manual enable is false, the bridge sends \cmd{D,0,0,0} if \param{send_stop_when_disabled} is true.
+
+\section{Obstacle-guard latch}
+
+START toggles the guard latch in the Uno firmware. The seventh field of the joystick packet carries that latched state. The bridge compares the packet latch to the internal guard state and calls \cmd{set_enabled()} when they differ. This makes obstacle guarding an operator-visible mode rather than a hidden parameter.
+
+\begin{safetybox}{Guard latch is not a safety-rated stop}
+The LiDAR guard is a development safety layer for forward motion. It is not a certified safety system. It cannot see every obstacle, it depends on a valid \topic{/scan}, and it can be intentionally disabled. Keep physical control of motor power during tests.
+\end{safetybox}
+
+\section{Published topics}
+
+\begin{longtable}{p{0.25\linewidth}p{0.18\linewidth}p{0.47\linewidth}}
+\toprule
+Topic & Type & Meaning\\
+\midrule
+\topic{/rudra/ps2_raw} & \cmd{String} & Raw joystick line from Uno.\\
+\topic{/rudra/drive_cmd} & \cmd{String} & Final \cmd{D,left,right,enable} sent to Teensy.\\
+\topic{/rudra/teensy_ack} & \cmd{String} & Non-telemetry response lines from Teensy.\\
+\topic{/cmd_vel} & \cmd{Twist} & Preview of the manual command as a ROS velocity command.\\
+\topic{/rudra/obstacle_guard} & \cmd{String} & Guard state, closest distance, and forward scale.\\
+\topic{/rudra/imu_raw} & \cmd{Imu} & Optional telemetry parsed from Teensy.\\
+\topic{/rudra/wheel_odom} & \cmd{Odometry} & Optional telemetry parsed from Teensy.\\
+\bottomrule
+\end{longtable}
+
+\section{Launch}
+
+Manual PS2-only bringup:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_bridge.sh
+\end{lstlisting}
+
+Manual PS2 with LiDAR obstacle guard:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_lidar_bridge.sh \
+  /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+\end{lstlisting}
+
+Manual PS2 with LiDAR, odometry, IMU, EKF, and optional power monitor:
+
+\begin{lstlisting}[language=bash]
+bash scripts/run_ps2_lidar_localization.sh
+# or enable the DCDC monitor explicitly:
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
+  enable_dcdc_monitor:=true
+\end{lstlisting}
+
+\section{Operator sequence}
+
+\begin{enumerate}
+  \item Confirm the robot is stable, wheels are lifted for first test, and motor power is controlled.
+  \item Start the selected manual bridge launch.
+  \item Echo \topic{/rudra/ps2_raw}. Move sticks and press SELECT/START to verify packet changes.
+  \item Press SELECT once to enable manual mode.
+  \item Use small stick deflections first. Watch \topic{/rudra/drive_cmd} and \topic{/rudra/teensy_ack}.
+  \item If LiDAR is active, place an object inside the front cone and verify \topic{/rudra/obstacle_guard} changes before driving on the floor.
+\end{enumerate}

@@ -1,0 +1,170 @@
+\chapter{LiDAR and Obstacle Guard}
+
+\section{YDLIDAR role}
+
+The YDLIDAR is a USB serial sensor. Its ROS 2 driver publishes \topic{/scan} as \cmd{sensor_msgs/msg/LaserScan}. The scan is used by RViz, the obstacle guard, and future SLAM/navigation layers. The LiDAR is not wired into the Sabertooth chain; it influences motion only through the ROS bridge.
+
+The current known-good LiDAR configuration is in:
+
+\begin{lstlisting}[language=bash]
+src/rudra_base_bridge/config/ydlidar_g2b.yaml
+\end{lstlisting}
+
+Important parameters include:
+
+\begin{center}
+\small
+\begin{tabularx}{\linewidth}{p{0.22\linewidth}Y}
+\toprule
+Parameter & Value\\
+\midrule
+\param{port} & \filep{/dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0}\\
+\param{baudrate} & 128000\\
+\param{frame_id} & \cmd{laser}\\
+\param{sample_rate} & 5\\
+\param{frequency} & 10.0\\
+\param{range_min} & 0.28 m\\
+\param{range_max} & 16.0 m\\
+\param{intensity} & true\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\section{LaserScan geometry}
+
+A LaserScan message contains an array of ranges. Each index maps to an angle:
+
+\begin{equation}
+\theta_i=\theta_{min}+i\Delta\theta.
+\end{equation}
+
+Each valid point can be converted into LiDAR-frame Cartesian coordinates:
+
+\begin{align}
+x_i &= r_i\cos\theta_i,\\
+y_i &= r_i\sin\theta_i.
+\end{align}
+
+The RUDRA obstacle guard does not build a map. It computes only the closest valid range inside a front cone.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[scale=2.1]
+\draw[->,thick] (0,0) -- (2.2,0) node[right]{front x};
+\draw[->,thick] (0,-1.2) -- (0,1.2) node[above]{y};
+\draw[rudraTeal,thick] (0,0) -- ({2*cos(35)},{2*sin(35)});
+\draw[rudraTeal,thick] (0,0) -- ({2*cos(-35)},{2*sin(-35)});
+\draw[rudraTealSoft,fill=rudraTealSoft,opacity=0.55] (0,0) -- ({2*cos(35)},{2*sin(35)}) arc (35:-35:2) -- cycle;
+\draw[rudraAmber,thick,dashed] (0,0) circle (0.45);
+\draw[rudraTeal,thick,dashed] (0,0) circle (1.0);
+\node at (1.15,0.62) {front cone};
+\node[rudraAmber] at (0.62,-0.18) {stop};
+\node[rudraTeal] at (1.26,-0.18) {slow};
+\fill[rudraAmber] (0.55,0.2) circle (0.04) node[above right]{closest obstacle};
+\end{tikzpicture}}
+\caption{Obstacle guard geometry. Only finite scan points inside the configured front cone are considered.}
+\end{figure}
+
+\section{Guard scale law}
+
+The current guard parameters are:
+
+\begin{align}
+\phi_{front} &= 70^\circ,\\
+d_{stop} &= 0.45\ \text{m},\\
+d_{slow} &= 1.00\ \text{m},\\
+t_{scan} &= 0.75\ \text{s}.
+\end{align}
+
+Let \(d\) be the closest valid front-cone obstacle distance. The forward scale is:
+
+\begin{equation}
+s(d)=
+\begin{cases}
+1, & \text{guard disabled},\\
+1, & \text{no fresh scan},\\
+1, & d \ge d_{slow},\\
+0, & d \le d_{stop},\\
+\dfrac{d-d_{stop}}{d_{slow}-d_{stop}}, & d_{stop}<d<d_{slow}.
+\end{cases}
+\end{equation}
+
+For positive forward commands, the filtered command is:
+
+\begin{equation}
+u_{forward,filtered}=s(d)u_{forward}.
+\end{equation}
+
+Reverse and turn-in-place remain available so the robot can back away from an obstacle.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}
+\begin{axis}[width=0.82\linewidth,height=6cm,xlabel={closest front distance (m)},ylabel={forward scale},xmin=0,xmax=1.4,ymin=-0.05,ymax=1.05,grid=both]
+\addplot[thick,rudraTeal,domain=0:0.45,samples=2]{0};
+\addplot[thick,rudraTeal,domain=0.45:1.0,samples=50]{(x-0.45)/(1.0-0.45)};
+\addplot[thick,rudraTeal,domain=1.0:1.4,samples=2]{1};
+\addplot[thick,rudraAmber,dashed] coordinates {(0.45,-0.05) (0.45,1.05)};
+\addplot[thick,black,dashed] coordinates {(1.0,-0.05) (1.0,1.05)};
+\node at (axis cs:0.23,0.12) {blocked};
+\node at (axis cs:0.72,0.55) {slowing};
+\node at (axis cs:1.18,0.92) {clear};
+\end{axis}
+\end{tikzpicture}}
+\caption{Forward-speed scaling used by the obstacle guard.}
+\end{figure}
+
+\section{Marker and status output}
+
+The guard publishes:
+
+\begin{itemize}
+  \item \topic{/rudra/obstacle_guard}: string status containing reason, enabled flag, closest front distance, and forward scale.
+  \item \topic{/rudra/obstacle_guard_marker}: RViz marker at the closest front obstacle point.
+\end{itemize}
+
+Marker colors are:
+
+\begin{center}
+\begin{tabular}{ll}
+\toprule
+Marker color & Meaning\\
+\midrule
+Green & clear\\
+Orange & slowing\\
+Red & blocked\\
+Gray & disabled\\
+Deleted/no marker & no closest front point or stale scan\\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{LiDAR startup behavior}
+
+The YDLIDAR driver may take 10--15 seconds before the first valid scan appears. Startup checksum warnings and repeated fixed-point warnings can occur while scans are still valid. The operational test is not a warning-free console; it is whether \topic{/scan} publishes with frame \cmd{laser} and the scan is visible in RViz.
+
+\section{Launching LiDAR}
+
+LiDAR only:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+bash scripts/run_lidar.sh \
+  /dev/serial/by-id/usb-Silicon_Labs_CP2102_USB_to_UART_Bridge_Controller_0001-if00-port0
+\end{lstlisting}
+
+View from Aghora:
+
+\begin{lstlisting}[language=bash]
+source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+cd /home/rudra/Projects/RUDRAv4
+source install/setup.bash
+ros2 launch rudra_base_bridge lidar_view.launch.py
+\end{lstlisting}
+
+The viewer launch starts RViz only. It does not start the LiDAR driver and does not start a drive bridge.

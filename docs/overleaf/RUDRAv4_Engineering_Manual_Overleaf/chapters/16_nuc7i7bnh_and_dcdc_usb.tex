@@ -1,0 +1,143 @@
+
+\chapter{Intel NUC7i7BNH and DCDC-USB}
+\label{chap:nuc-dcdc}
+
+The onboard computer is an Intel NUC7i7BNH.  In earlier RUDRA material the robot deck used a Jetson Nano.  RUDRAv4 now uses the NUC as the primary ROS computer, so the power architecture, runtime monitoring, shutdown policy, and mechanical mounting assumptions should be documented around the NUC.
+
+\section{NUC role in the robot}
+The NUC is not a microcontroller.  It is a Linux computer running \ros{}, launch files, Python bridge nodes, LiDAR drivers, RViz when needed, logging, and networking.  It should not directly toggle motor-driver pins or depend on real-time Linux timing for wheel safety.  The NUC sends commands to the Teensy; the Teensy owns the immediate motor-output timing and timeout behavior.
+
+\begin{table}[h]
+\centering
+\caption{NUC responsibilities versus firmware responsibilities.}
+\begin{tabularx}{\linewidth}{p{0.28\linewidth}Y}
+\toprule
+NUC responsibility & Firmware responsibility \\
+\midrule
+ROS graph, launch files, parameters, logs, SSH, RViz, LiDAR driver, DCDC monitor, obstacle guard, localization, command arbitration & Pin timing, PS2 electrical interface, MPU6050 I2C reads, encoder counting, packet serial to Sabertooth, immediate motor stop on missing command \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{NUC7i7BNH electrical input}
+The NUC is treated as a 19 V class load.  The current RUDRAv4 configuration monitors the DCDC output against a 19 V nominal rail with an accepted range of \SI{17.1}{\volt} to \SI{20.9}{\volt}.  That range is also encoded in \filep{src/rudra_base_bridge/config/rudra_v4_hardware.yaml}:
+
+\begin{lstlisting}[caption={NUC DCDC output range from RUDRAv4 hardware config.}]
+expected_output_min_voltage: 17.1
+expected_output_max_voltage: 20.9
+\end{lstlisting}
+
+At power \(P\), output voltage \(V_o\), and DCDC efficiency \(\eta\), the battery input current is approximated by:
+\begin{equation}
+I_{in} \approx \frac{P}{\eta V_{in}}.
+\end{equation}
+
+This equation matters because the DCDC-USB status utility reports voltages and status fields, but not output current.  The monitor cannot compute watts directly.  Instead, RUDRAv4 watches input voltage, output voltage, programmed output voltage, and sudden input sag.
+
+\section{DCDC-USB role}
+The Mini-Box DCDC-USB is the regulated supply between the dedicated 4S NUC LiPo and the NUC DC input.  It provides a programmable output and a USB telemetry/configuration interface.  The robot wiring intent is:
+
+\begin{center}
+\resizebox{0.92\linewidth}{!}{%
+\begin{tikzpicture}[node distance=16mm and 18mm, every node/.append style={font=\small}]
+  \node[rudraHw, minimum width=30mm] (bat) {OVONIC 4S LiPo\\14.8 V nominal};
+  \node[rudraBlock, right=of bat, minimum width=30mm] (dcdc) {Mini-Box\\DCDC-USB};
+  \node[rudraHw, right=of dcdc, minimum width=34mm] (nuc) {Intel NUC7i7BNH\\ROS 2 computer};
+  \node[rudraTopic, below=14mm of dcdc, minimum width=38mm] (usb) {USB telemetry\\\cmd{dcdc-usb -a}};
+  \node[rudraBlock, right=of usb, minimum width=38mm] (mon) {ROS monitor\\\pkg{dcdc_usb_monitor}};
+  \draw[rudraArrow] (bat) -- (dcdc);
+  \draw[rudraArrow] (dcdc) -- (nuc);
+  \draw[rudraDashed] (dcdc) -- (usb);
+  \draw[rudraArrow] (usb) -- (mon);
+  \node[font=\scriptsize, above=1mm of dcdc] {programmable 19 V class output};
+  \node[font=\scriptsize, below=1mm of bat] {6-34 V DCDC input window};
+\end{tikzpicture}}
+\end{center}
+
+The DCDC-USB does not power the Sabertooths and it does not command motors.  It is a dedicated NUC rail.
+
+\section{Programming the DCDC-USB}
+RUDRAv4 includes a source snapshot of the Mini-Box Linux utility under \filep{reference/DCDC/dcdc-usb}.  The current repo includes \filep{scripts/install_dcdc_usb_tool.sh}, which builds the tool, installs it, and adds a udev rule for the USB device.
+
+\begin{lstlisting}[language=bash,caption={Install the DCDC-USB Linux utility from the RUDRAv4 workspace.}]
+cd /home/rudra/Projects/RUDRAv4
+bash scripts/install_dcdc_usb_tool.sh
+\end{lstlisting}
+
+Reconnect the USB cable and read the board:
+
+\begin{lstlisting}[language=bash,caption={Read all DCDC-USB status fields.}]
+dcdc-usb -a
+\end{lstlisting}
+
+The included utility readme states that running \cmd{dcdc-usb} with no parameters displays the current output voltage, \cmd{sudo dcdc-usb -a} displays all settings, and \cmd{sudo dcdc-usb -v 20.50} programs a \SI{20.5}{\volt} output.  For RUDRAv4, use a 19 V class setting and verify with a multimeter before connecting the NUC.
+
+\begin{lstlisting}[language=bash,caption={Example: program a 19.6 V NUC output target.}]
+# Bench only. Do not connect the NUC until the output is verified with a meter.
+sudo dcdc-usb -v 19.60
+sudo dcdc-usb -a
+\end{lstlisting}
+
+\begin{safetybox}{Programming is not verification}
+A programmed target voltage is not the same as a verified live output.  Before plugging the DCDC output into the NUC, power the DCDC input from the 4S LiPo and measure the DCDC output with a multimeter under a safe no-NUC condition.
+\end{safetybox}
+
+\section{Interpreting DCDC-USB output}
+The status output can contain two separate output-voltage meanings: a live output reading and a programmed target.  The RUDRAv4 parser preserves this distinction.  If the board is connected only over USB but the LiPo input is absent, it is possible to see \cmd{input voltage: 0.00} and a programmed target field.  That does not mean the NUC rail is powered.
+
+\begin{lstlisting}[caption={Typical status fields used by RUDRAv4.}]
+input voltage: 15.42
+output voltage: 19.40
+mode: 0 (dumb)
+output enable: On
+\end{lstlisting}
+
+The ROS node parses these fields into \topic{/rudra/nuc_battery} and \topic{/diagnostics}.  It estimates state of charge from pack voltage only:
+\begin{equation}
+\mathrm{SOC}_{est}=\mathrm{clip}\left(\frac{V_{in}-V_{empty}}{V_{full}-V_{empty}},0,1\right).
+\end{equation}
+
+Because LiPo voltage sags under load, \(\mathrm{SOC}_{est}\) is a dashboard hint, not a precision fuel gauge.
+
+\section{ROS monitor}
+Run the DCDC monitor alone:
+
+\begin{lstlisting}[language=bash,caption={Launch the standalone DCDC monitor.}]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
+\end{lstlisting}
+
+Monitor topics:
+
+\begin{lstlisting}[language=bash,caption={DCDC monitor topics.}]
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
+\end{lstlisting}
+
+The node publishes \topic{/rudra/nuc_battery} as \cmd{sensor_msgs/msg/BatteryState}.  Since the DCDC-USB utility does not report output current, \cmd{current}, \cmd{charge}, \cmd{capacity}, and \cmd{design_capacity} are intentionally unknown.  The voltage fields and diagnostic message are the useful signals.
+
+\section{Shutdown policy}
+The configuration contains warning, critical, and shutdown thresholds for the NUC 4S input pack:
+
+\begin{lstlisting}[caption={DCDC monitor safety thresholds.}]
+full_voltage: 16.8
+empty_voltage: 13.2
+warning_voltage: 14.4
+critical_voltage: 13.2
+shutdown_voltage: 12.8
+shutdown_enabled: false
+shutdown_hold_sec: 5.0
+\end{lstlisting}
+
+Leave shutdown disabled until the DCDC telemetry agrees with a multimeter and the NUC runtime has been tested.  After validation, enabling shutdown can protect the filesystem from brownout, but it must not surprise an operator during bench testing.
+
+\section{Bench validation sequence}
+\begin{enumerate}
+  \item USB-only test: connect the DCDC-USB to the NUC over USB and verify \cmd{dcdc-usb -a} can communicate.
+  \item Programming test: set the 19 V class output target with \cmd{sudo dcdc-usb -v 19.60}.
+  \item Powered no-load test: connect the 4S LiPo to the DCDC input, leave the NUC output disconnected, and verify output with a multimeter.
+  \item Loaded bench test: power the NUC from the DCDC output while still on the bench.  Run \cmd{dcdc-usb -a} and \topic{/rudra/nuc_battery}.
+  \item Robot test: route wiring cleanly, strain-relieve the barrel output, and confirm the NUC does not reboot during LiDAR startup.
+\end{enumerate}

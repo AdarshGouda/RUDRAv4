@@ -1,0 +1,121 @@
+\chapter{ROS Workspace Architecture}
+
+\section{Repository layout}
+
+The robot repository is the workspace at:
+
+\begin{lstlisting}[language=bash]
+/home/rudra/Projects/RUDRAv4
+\end{lstlisting}
+
+The primary package is:
+
+\begin{lstlisting}[language=bash]
+src/rudra_base_bridge
+\end{lstlisting}
+
+The package is Python-based, but it carries firmware sketches, YAML configuration, RViz files, and launch files. This is acceptable for a robot-development workspace because the package is the unit of bringup, not merely the unit of Python code.
+
+\section{Node inventory}
+
+\begin{longtable}{p{0.25\linewidth}p{0.25\linewidth}p{0.40\linewidth}}
+\toprule
+Executable & Source file & Purpose\\
+\midrule
+\pkg{ps2_uno_to_teensy} & \filep{ps2_uno_to_teensy.py} & Reads \cmd{J,...} from Uno, applies joystick mixing and obstacle guard, writes \cmd{D,...} to Teensy, publishes observability topics.\\
+\pkg{cmd_vel_to_teensy} & \filep{cmd_vel_to_teensy.py} & Converts ROS \topic{/cmd_vel} into left/right Sabertooth commands and writes them to Teensy.\\
+\pkg{dcdc_usb_monitor} & \filep{dcdc_usb_monitor.py} & Parses \cmd{dcdc-usb -a} output and publishes NUC battery state and diagnostics.\\
+\pkg{odom_tf_broadcaster} & \filep{odom_tf_broadcaster.py} & Broadcasts \cmd{odom -> base_link} from odometry messages when localization is active.\\
+\pkg{serial_port_list} & \filep{serial_port_list.py} & Helper to list serial ports.\\
+\bottomrule
+\end{longtable}
+
+\section{Helper modules}
+
+Three helper modules are central to maintainability:
+
+\begin{description}
+\item[\pkg{serial_utils.py}] Provides \pkg{LineSerial}, a reconnecting line-oriented wrapper around pyserial, plus clamp, map, and deadband helpers.
+\item[\pkg{obstacle_guard.py}] Encapsulates LiDAR scan filtering and command scaling. Both bridge nodes use the same guard behavior.
+\item[\pkg{teensy_telemetry.py}] Parses optional \cmd{IMU,...} and \cmd{ODOM,...} lines and publishes ROS messages.
+\end{description}
+
+This modularity matters because the two drive bridges should not maintain two independent obstacle-guard implementations or two independent telemetry parsers.
+
+\section{Launch file inventory}
+
+\begin{longtable}{p{0.31\linewidth}p{0.59\linewidth}}
+\toprule
+Launch file & Role\\
+\midrule
+\filep{rudra_ps2.launch.py} & Starts manual PS2 bridge only.\\
+\filep{rudra_ps2_lidar.launch.py} & Starts PS2 bridge, YDLIDAR driver, and static \cmd{base_link -> laser} transform.\\
+\filep{rudra_ps2_lidar_localization.launch.py} & Includes PS2+LiDAR launch, includes localization launch, and can optionally start DCDC monitor.\\
+\filep{cmd_vel_to_teensy.launch.py} & Starts the autonomous or teleop \topic{/cmd_vel} bridge.\\
+\filep{lidar.launch.py} & Starts only the YDLIDAR driver and static LiDAR transform.\\
+\filep{lidar_view.launch.py} & Starts RViz view for scan and obstacle marker. It does not start a driver.\\
+\filep{localization.launch.py} & Starts EKF, odom TF broadcaster, and \cmd{base_link -> imu_link} static transform.\\
+\filep{localization_view.launch.py} & Starts RViz view for odometry, fused odometry, scan, and transforms.\\
+\filep{dcdc_usb_monitor.launch.py} & Starts NUC power monitor only.\\
+\bottomrule
+\end{longtable}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[node distance=7mm]
+\node[rudraBlock] (full) {\filep{rudra_ps2_lidar_localization.launch.py}};
+\node[rudraBlock,below left=of full] (ps2lidar) {\filep{rudra_ps2_lidar.launch.py}};
+\node[rudraBlock,below right=of full] (loc) {\filep{localization.launch.py}};
+\node[rudraBlock,below=of full] (dcdc) {optional\\\pkg{dcdc_usb_monitor}};
+\node[rudraTopic,below left=of ps2lidar] (ps2) {\pkg{ps2_uno_to_teensy}};
+\node[rudraTopic,below=of ps2lidar] (lidar) {\pkg{ydlidar_ros2_driver_node}};
+\node[rudraTopic,below right=of ps2lidar] (tf1) {static TF\\\cmd{base_link -> laser}};
+\node[rudraTopic,below left=of loc] (ekf) {\pkg{ekf_filter_node}};
+\node[rudraTopic,below=of loc] (tf2) {\pkg{odom_tf_broadcaster}};
+\node[rudraTopic,below right=of loc] (imu_tf) {static TF\\\cmd{base_link -> imu_link}};
+\draw[rudraArrow] (full) -- (ps2lidar);
+\draw[rudraArrow] (full) -- (loc);
+\draw[rudraDashed] (full) -- (dcdc);
+\draw[rudraArrow] (ps2lidar) -- (ps2);
+\draw[rudraArrow] (ps2lidar) -- (lidar);
+\draw[rudraArrow] (ps2lidar) -- (tf1);
+\draw[rudraArrow] (loc) -- (ekf);
+\draw[rudraArrow] (loc) -- (tf2);
+\draw[rudraArrow] (loc) -- (imu_tf);
+\end{tikzpicture}}
+\caption{Launch dependency tree for the full manual, LiDAR, localization, and optional power-monitor bringup.}
+\end{figure}
+
+\section{Configuration files}
+
+The three YAML files form the runtime contract:
+
+\begin{description}
+\item[\filep{rudra_v4_hardware.yaml}] Base bridge parameters: ports, baud, timeouts, joystick mapping, maximum speeds, obstacle guard parameters, telemetry topics, and DCDC thresholds.
+\item[\filep{ydlidar_g2b.yaml}] YDLIDAR parameters: port, frame, baudrate, sample rate, scan range, frequency, intensity mode, and inversion/reversion flags.
+\item[\filep{localization_ekf.yaml}] EKF parameters: two-dimensional mode, frames, wheel odom input, IMU input, selected measurement variables, queue sizes, and timeouts.
+\end{description}
+
+\section{Build model}
+
+The repository build uses \cmd{colcon}. The minimal robot package build is:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+bash scripts/install_deps.sh
+source /opt/ros/lyrical/setup.bash
+colcon build --packages-select rudra_base_bridge
+source install/setup.bash
+\end{lstlisting}
+
+The checked-in \filep{scripts/build_ws.sh} wraps this idea. The build output goes into \filep{install/}. The runtime source order must still be respected in every terminal that launches robot nodes.
+
+\section{Why wrapper scripts exist}
+
+Wrapper scripts are not shortcuts only; they are operational safeguards. They set the domain variables, source the correct overlays, select the known-good config files, and reduce typing mistakes. For example:
+
+\begin{lstlisting}[language=bash]
+bash scripts/run_ps2_lidar_localization.sh
+\end{lstlisting}
+
+is less error-prone than manually typing a multi-line launch command with several file paths and substitutions.

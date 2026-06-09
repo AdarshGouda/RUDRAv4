@@ -1,0 +1,113 @@
+\chapter{Launching, Operating, and Monitoring RUDRA}
+
+\section{Pre-launch checklist}
+
+Before launching robot nodes:
+
+\begin{enumerate}
+  \item Confirm motor power can be disconnected immediately.
+  \item Confirm the wheels are lifted for the first test after any change.
+  \item Confirm the Uno, Teensy, LiDAR, and DCDC-USB appear under \filep{/dev/serial/by-id} or expected USB listings.
+  \item Close Arduino Serial Monitor or any terminal that owns a serial port.
+  \item Confirm both Rudra and Aghora use \cmd{ROS_DOMAIN_ID=42} and \cmd{ROS_LOCALHOST_ONLY=0}.
+  \item Source overlays in order: base ROS, external LiDAR workspace, then RUDRAv4.
+\end{enumerate}
+
+\section{Mode selection}
+
+\begin{longtable}{p{0.24\linewidth}p{0.34\linewidth}p{0.32\linewidth}}
+\toprule
+Mode & Use when & Command\\
+\midrule
+PS2 only & Basic manual drive without LiDAR driver & \cmd{bash scripts/run_ps2_bridge.sh}\\
+PS2 + LiDAR & Manual driving with \topic{/scan} and obstacle guard & \cmd{bash scripts/run_ps2_lidar_bridge.sh}\\
+PS2 + LiDAR + localization & Full development bringup with IMU/wheel odom and EKF & \cmd{bash scripts/run_ps2_lidar_localization.sh}\\
+\topic{/cmd_vel} bridge & Keyboard teleop, Nav2, autonomy, or external command publisher & \cmd{bash scripts/run_cmd_vel_bridge.sh}\\
+LiDAR only & Sensor and RViz debug without drive bridge & \cmd{bash scripts/run_lidar.sh}\\
+DCDC monitor only & Power rail debug & \cmd{ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py}\\
+\bottomrule
+\end{longtable}
+
+\begin{safetybox}{One Teensy owner only}
+Do not run \pkg{ps2_uno_to_teensy} and \pkg{cmd_vel_to_teensy} at the same time. Both write to the same Teensy serial port.
+\end{safetybox}
+
+\section{Full bringup sequence}
+
+On Rudra:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+bash scripts/list_serial.sh
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+bash scripts/run_ps2_lidar_localization.sh
+\end{lstlisting}
+
+On Aghora:
+
+\begin{lstlisting}[language=bash]
+source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+cd /home/rudra/Projects/RUDRAv4
+source install/setup.bash
+ros2 launch rudra_base_bridge localization_view.launch.py
+\end{lstlisting}
+
+\section{Monitoring commands}
+
+Use a separate terminal for monitors:
+
+\begin{lstlisting}[language=bash]
+ros2 node list
+ros2 topic list
+ros2 topic echo /rudra/ps2_raw
+ros2 topic echo /rudra/drive_cmd
+ros2 topic echo /rudra/teensy_ack
+ros2 topic echo /rudra/obstacle_guard
+ros2 topic echo --once /scan
+ros2 topic echo --once /rudra/imu/raw
+ros2 topic echo --once /rudra/wheel_odom
+ros2 topic echo --once /odometry/filtered
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
+\end{lstlisting}
+
+\section{What good looks like}
+
+\begin{longtable}{p{0.33\linewidth}p{0.57\linewidth}}
+\toprule
+Observation & Interpretation\\
+\midrule
+\topic{/rudra/ps2_raw} changes when sticks move & Uno and PS2 controller are reaching ROS.\\
+\topic{/rudra/drive_cmd} shows bounded \cmd{D,...} lines & Bridge is computing final motor packets.\\
+\topic{/rudra/teensy_ack} echoes \cmd{ACK,...} & Teensy is receiving drive commands.\\
+\topic{/scan} publishes with frame \cmd{laser} & YDLIDAR driver is healthy enough for RViz and guard.\\
+\topic{/rudra/obstacle_guard} changes when an obstacle is placed ahead & Scan reaches guard and forward scale logic is active.\\
+\topic{/rudra/imu_raw} and \topic{/rudra/wheel_odom} publish & Telemetry firmware and parser are active.\\
+\topic{/odometry/filtered} publishes & EKF has inputs and is alive.\\
+RViz displays scan and marker & DDS domain, TF, and display settings are correct.\\
+\bottomrule
+\end{longtable}
+
+\section{Shutdown}
+
+A conservative shutdown order is:
+
+\begin{enumerate}
+  \item Release sticks or stop the \topic{/cmd_vel} publisher.
+  \item Stop the drive launch with Ctrl-C.
+  \item Stop LiDAR if needed:
+\begin{lstlisting}[language=bash]
+bash scripts/stop_lidar.sh
+\end{lstlisting}
+  \item Remove Sabertooth motor power.
+  \item Shut down the NUC cleanly:
+\begin{lstlisting}[language=bash]
+sudo shutdown now
+\end{lstlisting}
+\end{enumerate}
+
+If the LiDAR still spins, it is still receiving USB power. Remove USB power physically.

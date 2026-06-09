@@ -1,0 +1,73 @@
+\chapter{Troubleshooting and Development Roadmap}
+
+\section{Fault isolation tree}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[node distance=7mm and 7mm]
+\node[rudraBlock] (sym) {Robot does not behave};
+\node[rudraTopic,below left=of sym] (power) {Power?};
+\node[rudraTopic,below=of sym] (serial) {Serial?};
+\node[rudraTopic,below right=of sym] (ros) {ROS graph?};
+\node[rudraTopic,below=of power] (volt) {DCDC and\\motor rails};
+\node[rudraTopic,below=of serial] (ports) {by-id paths\\and port ownership};
+\node[rudraTopic,below=of ros] (topics) {nodes, topics,\\frames};
+\draw[rudraArrow] (sym) -- (power);
+\draw[rudraArrow] (sym) -- (serial);
+\draw[rudraArrow] (sym) -- (ros);
+\draw[rudraArrow] (power) -- (volt);
+\draw[rudraArrow] (serial) -- (ports);
+\draw[rudraArrow] (ros) -- (topics);
+\end{tikzpicture}}
+\caption{First-level troubleshooting split. Do not debug ROS until power and serial identity are known.}
+\end{figure}
+
+\section{Common symptoms}
+
+\begin{longtable}{p{0.31\linewidth}p{0.59\linewidth}}
+\toprule
+Symptom & Likely action\\
+\midrule
+No \topic{/rudra/ps2_raw} & Check Uno port path, close Arduino Serial Monitor, reflash Uno if no \cmd{J,...} lines appear.\\
+\topic{/rudra/ps2_raw} present but no motion & Press SELECT, check \topic{/rudra/drive_cmd}, verify obstacle guard is not blocking forward motion.\\
+No \topic{/rudra/teensy_ack} & Check Teensy port path, firmware, USB cable, and whether another process owns the port.\\
+Motor moves wrong direction & First check wiring/motor polarity. Then check left/right side mapping. Do not blindly invert ROS signs.\\
+No \topic{/scan} & Source \filep{/home/rudra/ros2_ws/install/setup.bash}, verify LiDAR by-id path, wait 10--15 seconds after launch.\\
+RViz sees \topic{/scan} but displays nothing & Set LaserScan reliability to Best Effort and fixed frame to \cmd{base_link} or \cmd{odom} as appropriate.\\
+Obstacle guard never changes & Confirm \topic{/scan} publishes, guard enabled, marker frame is \cmd{laser}, and object is inside front cone.\\
+No \topic{/rudra/imu_raw} or \topic{/rudra/wheel_odom} & Flash telemetry Teensy firmware and ensure \param{publish_teensy_telemetry} is true.\\
+No \topic{/odometry/filtered} & Install/launch \pkg{robot_localization}, check EKF config, and confirm input topics exist.\\
+DCDC monitor stale & Verify \cmd{dcdc-usb -a} works outside ROS and USB permissions are correct.\\
+\bottomrule
+\end{longtable}
+
+\section{Development roadmap}
+
+RUDRAv4 is now a suitable foundation for staged improvements. The recommended order is:
+
+\begin{enumerate}
+  \item \textbf{Lock base bringup}: preserve a known-good tag once manual, LiDAR, telemetry, and DCDC monitor work together.
+  \item \textbf{Calibrate odometry}: measure wheel radius, effective track width, encoder CPR, and sign conventions on the live robot.
+  \item \textbf{Improve telemetry quality}: validate MPU6050 mounting, gyro bias, accelerometer orientation, and covariance values.
+  \item \textbf{Add wheel-speed PID}: only after encoder signs/scales are validated. Start with low speeds and lifted wheels.
+  \item \textbf{Introduce SLAM}: add map generation only after \cmd{odom -> base_link} and \cmd{base_link -> laser} are stable.
+  \item \textbf{Introduce Nav2}: use \topic{/cmd_vel} bridge as the actuation endpoint and preserve the low-level obstacle guard as a final filter.
+  \item \textbf{Document hardware revisions}: if motor drivers, encoders, wheel radius, or NUC power hardware change, update this manual and the YAML constants.
+\end{enumerate}
+
+\section{What not to do}
+
+\begin{safetybox}{Anti-patterns}
+\begin{itemize}
+  \item Do not run two nodes that write to the Teensy serial port.
+  \item Do not tune PID before encoder sign and scale are correct.
+  \item Do not treat LiDAR warnings as failure if \topic{/scan} is publishing valid data.
+  \item Do not use \filep{/dev/ttyACM0} in permanent config when a by-id path exists.
+  \item Do not add SLAM until odom and TF are stable.
+  \item Do not power the NUC from a DCDC output that has not been measured under powered conditions.
+\end{itemize}
+\end{safetybox}
+
+\section{Future book additions}
+
+This manual can be extended with dedicated chapters for URDF, robot state publisher, wheel PID tuning, SLAM Toolbox, Nav2 costmaps, behavior trees, remote development over SSH, and data logging. Those chapters should be added only after the corresponding implementation exists in the workspace, so the manual remains a source of truth rather than a wish list.

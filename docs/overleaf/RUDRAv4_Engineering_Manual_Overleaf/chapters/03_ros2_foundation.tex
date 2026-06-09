@@ -1,0 +1,99 @@
+\chapter{ROS 2 Foundation for RUDRA}
+
+\section{Why ROS 2 is the robot backbone}
+
+\ros{} is not just a collection of libraries. In RUDRAv4 it is the distributed communication fabric that lets the NUC combine human input, motor command generation, LiDAR scans, state estimation, diagnostics, and remote visualization. The NUC runs nodes. Nodes communicate through topics and services. Launch files describe which nodes start together. YAML files store runtime parameters. DDS discovery allows Rudra and Aghora to see each other when they share the same domain.
+
+The essential idea is that each robot function becomes a node with a clear interface. A node does not need to know how the other node is implemented. It needs only the message type and topic name.
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[node distance=8mm and 10mm]
+\node[rudraBlock] (ps2) {\pkg{ps2_uno_to_teensy}};
+\node[rudraBlock,right=of ps2] (guard) {\pkg{LidarObstacleGuard}\\inside bridge};
+\node[rudraBlock,right=of guard] (teensy) {Teensy serial\\writer};
+\node[rudraTopic,above=of ps2] (raw) {\topic{/rudra/ps2_raw}};
+\node[rudraTopic,below=of ps2] (cmdvel) {\topic{/cmd_vel}};
+\node[rudraTopic,above=of guard] (scan) {\topic{/scan}};
+\node[rudraTopic,below=of guard] (status) {\topic{/rudra/obstacle_guard}};
+\node[rudraTopic,above=of teensy] (drive) {\topic{/rudra/drive_cmd}};
+\node[rudraTopic,below=of teensy] (ack) {\topic{/rudra/teensy_ack}};
+\draw[rudraArrow] (ps2) -- (guard);
+\draw[rudraArrow] (guard) -- (teensy);
+\draw[rudraDashed] (ps2) -- (raw);
+\draw[rudraDashed] (ps2) -- (cmdvel);
+\draw[rudraArrow] (scan) -- (guard);
+\draw[rudraDashed] (guard) -- (status);
+\draw[rudraDashed] (teensy) -- (drive);
+\draw[rudraDashed] (teensy) -- (ack);
+\end{tikzpicture}}
+\caption{ROS graph concept for manual driving. The node reads serial, publishes observability topics, applies LiDAR filtering, and writes final drive packets.}
+\end{figure}
+
+\section{Nodes, topics, messages, and parameters}
+
+For RUDRAv4, the following ROS 2 terms are operationally important:
+
+\begin{description}
+  \item[Node] A running process or object that participates in ROS. Examples include \pkg{ps2_uno_to_teensy}, \pkg{cmd_vel_to_teensy}, \pkg{ydlidar_ros2_driver_node}, \pkg{ekf_filter_node}, and \pkg{dcdc_usb_monitor}.
+  \item[Topic] A named stream of messages. Examples are \topic{/scan}, \topic{/cmd_vel}, \topic{/rudra/drive_cmd}, \topic{/rudra/wheel_odom}, and \topic{/diagnostics}.
+  \item[Message type] The schema for a topic. \topic{/cmd_vel} uses \cmd{geometry_msgs/msg/Twist}. \topic{/scan} uses \cmd{sensor_msgs/msg/LaserScan}. \topic{/rudra/wheel_odom} uses \cmd{nav_msgs/msg/Odometry}.
+  \item[Parameter] Runtime configuration loaded into a node. Serial ports, baud rates, stop distances, frame names, timeouts, and battery thresholds are parameters.
+  \item[Launch file] A Python file that instantiates nodes with arguments, parameters, and optional includes.
+\end{description}
+
+\section{Workspace overlays}
+
+RUDRAv4 uses an overlay chain. The order matters because later workspaces extend the environment created by earlier workspaces:
+
+\begin{lstlisting}[language=bash]
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source /home/rudra/Projects/RUDRAv4/install/setup.bash
+\end{lstlisting}
+
+The base ROS installation defines ROS 2 commands and core packages. The external workspace defines the YDLIDAR SDK and driver. The robot workspace defines \pkg{rudra_base_bridge}. If the LiDAR workspace is not sourced, ROS may still see the RUDRA bridge package but fail to find \pkg{ydlidar_ros2_driver}.
+
+\section{DDS domain and remote visualization}
+
+Rudra and Aghora must share a ROS domain to see each other. The helper scripts default to:
+
+\begin{lstlisting}[language=bash]
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+\end{lstlisting}
+
+\cmd{ROS_DOMAIN_ID} separates independent ROS graphs on the same network. \cmd{ROS_LOCALHOST_ONLY=0} permits network discovery beyond the local machine. A common failure is that nodes are healthy on Rudra but Aghora sees nothing because the laptop is in a different domain or locked to localhost.
+
+\section{Package structure}
+
+The active robot package is \pkg{rudra_base_bridge}. Its development responsibilities are grouped as follows:
+
+\begin{longtable}{p{0.30\linewidth}p{0.60\linewidth}}
+\toprule
+Path & Meaning\\
+\midrule
+\filep{config/rudra_v4_hardware.yaml} & Serial ports, robot constants, obstacle guard parameters, DCDC thresholds.\\
+\filep{config/ydlidar_g2b.yaml} & YDLIDAR serial, frame, scan, intensity, frequency, range limits.\\
+\filep{config/localization_ekf.yaml} & EKF inputs, frame names, two-dimensional mode, selected state variables.\\
+\filep{launch/*.launch.py} & System bringup recipes.\\
+\filep{rudra_base_bridge/*.py} & Python ROS 2 nodes and helper modules.\\
+\filep{firmware/*/*.ino} & Uno and Teensy firmware sketches.\\
+\filep{scripts/*.sh} & Operator wrappers that source the correct overlays and launch common modes.\\
+\bottomrule
+\end{longtable}
+
+\section{ROS 2 mental model for RUDRA development}
+
+When debugging, do not start by reading every file. Ask which boundary failed:
+
+\begin{enumerate}
+  \item Is the USB serial device visible at \filep{/dev/serial/by-id}? If not, the fault is below ROS.
+  \item Is the node running? Use \cmd{ros2 node list}.
+  \item Is the topic present? Use \cmd{ros2 topic list}.
+  \item Is data arriving? Use \cmd{ros2 topic echo --once TOPIC}.
+  \item Is the message frame correct? Use RViz, \cmd{ros2 topic echo}, and TF tools.
+  \item Is a launch or parameter mistake causing a healthy node to use the wrong port, frame, or threshold?
+\end{enumerate}
+
+This is why the bridge nodes publish observability topics. The serial boundary is opaque unless you publish what was read and what was written. RUDRAv4 publishes \topic{/rudra/ps2_raw}, \topic{/rudra/drive_cmd}, \topic{/rudra/teensy_ack}, and \topic{/rudra/obstacle_guard} specifically to make that boundary visible.

@@ -1,0 +1,78 @@
+\documentclass[11pt,oneside]{book}
+\usepackage{fontspec}
+\setmainfont{DejaVu Serif}
+\setsansfont{DejaVu Sans}
+\setmonofont{DejaVu Sans Mono}[Scale=0.86]
+\usepackage{manual}
+
+\title{\Huge \RUDRAv{} Engineering Development Manual\\[0.3em]\Large ROS 2, Setup, Hardware, Firmware, Power, Launch, and Operations}
+\author{Adarsh Gouda}
+\date{Workspace snapshot: RUDRAv4, June 2026}
+
+\begin{document}
+\frontmatter
+\begin{titlepage}
+\centering
+\vspace*{1.0cm}
+% {\Huge\bfseries \RUDRAv{}\par}
+% \vspace{0.5cm}
+% {\Large RUDRA::ROS-Unified Differential-drive Rover Architecture\par}
+
+\vspace{1cm}
+\includegraphics[width=0.85\linewidth]{figures/rudra_logo.png}
+\vfill
+{\Huge\bfseries V4 Development Manual\par}
+\vfill
+{\large Adarsh Gouda\par}
+{\large 06/08/2026}
+\end{titlepage}
+
+\begin{figure}[p]
+\centering
+
+\includegraphics[width=0.75\linewidth]{figures/photos/rudra_lidar_front.png}
+
+\vspace{1cm}
+
+\includegraphics[width=0.75\linewidth]{figures/photos/rudra_finished_front.png}
+
+\end{figure}
+\clearpage
+
+\include{chapters/preface}
+\tableofcontents
+\listoffigures
+\listoftables
+
+\mainmatter
+\include{chapters/01_system_intent}
+\include{chapters/02_hardware_architecture}
+\include{chapters/03_ros2_foundation}
+\include{chapters/15_fresh_install_nuc_aghora}
+\include{chapters/04_differential_drive_theory}
+\include{chapters/05_power_and_electrical}
+\include{chapters/16_nuc7i7bnh_and_dcdc_usb}
+\include{chapters/17_sabertooth_motor_driver}
+\include{chapters/18_teensy_arduino_ps2}
+\include{chapters/19_mpu6050_imu}
+\include{chapters/20_ydlidar_custom_driver}
+\include{chapters/21_robot_body_batteries_bom}
+\include{chapters/22_engineering_schematics}
+\include{chapters/06_firmware_architecture}
+\include{chapters/07_ros_workspace_architecture}
+\include{chapters/08_serial_protocols}
+\include{chapters/09_manual_control_bridge}
+\include{chapters/10_lidar_obstacle_guard}
+\include{chapters/11_localization_and_tf}
+\include{chapters/12_launch_and_monitor}
+\include{chapters/13_test_and_commissioning}
+\include{chapters/14_troubleshooting_and_roadmap}
+
+\appendix
+\include{appendices/command_reference}
+\include{appendices/config_reference}
+\include{appendices/source_snapshots}
+
+\backmatter
+\include{chapters/references}
+\end{document}

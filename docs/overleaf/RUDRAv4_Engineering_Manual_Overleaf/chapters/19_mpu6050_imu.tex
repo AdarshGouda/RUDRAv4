@@ -1,0 +1,70 @@
+
+\chapter{Inertial Measurement Layer}
+\label{chap:mpu6050}
+
+RUDRAv4 uses an MPU6050-class six-axis inertial measurement unit.  The sensor provides three-axis acceleration and three-axis angular-rate measurements.  It does not provide a magnetometer.  Therefore, yaw will drift if it is only integrated from gyro rate.  The robot should use the IMU as one input to the localization stack, not as an absolute heading oracle.
+
+\section{Sensor model}
+The IMU output can be modeled as:
+\begin{align}
+\tilde{\boldsymbol{\omega}} &= \boldsymbol{\omega} + \boldsymbol{b}_{g} + \boldsymbol{n}_{g}, \\
+\tilde{\boldsymbol{a}} &= \mathbf{R}^{T}(\boldsymbol{a}-\boldsymbol{g}) + \boldsymbol{b}_{a} + \boldsymbol{n}_{a},
+\end{align}
+where \(\tilde{\boldsymbol{\omega}}\) is the measured angular rate, \(\tilde{\boldsymbol{a}}\) is the measured acceleration, \(\boldsymbol{b}_{g}\) and \(\boldsymbol{b}_{a}\) are gyro and accelerometer biases, and \(\boldsymbol{n}_{g}\), \(\boldsymbol{n}_{a}\) are noise terms.
+
+For a ground robot, the most important IMU signal is usually yaw rate about the vertical axis.  Roll and pitch are useful for sanity checking bumps and mounting errors, but RUDRA navigation depends mostly on planar motion.
+
+\section{Firmware conversion}
+The Teensy reads the MPU6050 over I2C.  Raw accelerometer and gyro counts must be converted exactly once.  Do not scale in firmware and then scale again on the NUC.
+
+\begin{lstlisting}[caption={Current ROS topic contract for IMU telemetry.}]
+Teensy packet: IMU,ax,ay,az,gx,gy,gz
+ROS topic:     /rudra/imu/raw
+ROS type:      sensor_msgs/msg/Imu
+Frame:         imu_link
+\end{lstlisting}
+
+If the firmware sends acceleration in \(\mathrm{m/s^2}\) and gyro rate in \(\mathrm{rad/s}\), the ROS bridge should publish those values directly.  If the firmware sends raw counts, the ROS bridge must apply the conversion factors and document them.
+
+\section{Frame convention}
+The IMU frame must be fixed relative to \cmd{base_link}.  In the current localization launch, a static transform connects \cmd{base_link} to \cmd{imu_link}.  The physical orientation should be verified by moving the robot by hand and checking RViz or \topic{/rudra/imu/raw}:
+
+\begin{enumerate}
+  \item Push the robot forward gently.  The acceleration sign should match the expected \cmd{base_link} forward axis.
+  \item Rotate the robot counterclockwise on the floor.  The yaw-rate sign should match ROS right-hand convention.
+  \item Keep the robot still.  Gyro rates should settle near zero after bias, and acceleration magnitude should be near \SI{9.81}{m/s^2}.
+\end{enumerate}
+
+\section{Filtering and fusion}
+Raw IMU data is noisy and biased.  RUDRAv4 uses the IMU with wheel odometry and \pkg{robot_localization}.  The conceptual filter state for a planar robot is:
+\begin{equation}
+\mathbf{x} = \begin{bmatrix} x & y & \theta & v_x & \omega_z \end{bmatrix}^{T}.
+\end{equation}
+
+Wheel odometry constrains planar position and velocity.  The IMU constrains angular velocity and, if orientation estimation is enabled, attitude.  The EKF prediction and update cycle is:
+\begin{align}
+\hat{\mathbf{x}}_{k|k-1} &= f(\hat{\mathbf{x}}_{k-1|k-1},\mathbf{u}_{k}) ,\\
+\mathbf{P}_{k|k-1} &= \mathbf{F}_{k}\mathbf{P}_{k-1|k-1}\mathbf{F}_{k}^{T}+\mathbf{Q}_{k},\\
+\mathbf{K}_{k} &= \mathbf{P}_{k|k-1}\mathbf{H}_{k}^{T}\left(\mathbf{H}_{k}\mathbf{P}_{k|k-1}\mathbf{H}_{k}^{T}+\mathbf{R}_{k}\right)^{-1},\\
+\hat{\mathbf{x}}_{k|k} &= \hat{\mathbf{x}}_{k|k-1} + \mathbf{K}_{k}\left(\mathbf{z}_{k}-h(\hat{\mathbf{x}}_{k|k-1})\right).
+\end{align}
+
+\section{Practical calibration}
+\begin{table}[h]
+\centering
+\caption{MPU6050 validation checks before trusting localization.}
+\begin{tabularx}{\linewidth}{p{0.26\linewidth}Y}
+\toprule
+Check & What to do \\
+\midrule
+Static bias & Leave the robot still for 30 seconds, record gyro mean, and confirm yaw rate is near zero after correction. \\
+Gravity magnitude & With the robot stationary, acceleration magnitude should be close to \SI{9.81}{m/s^2}. \\
+Axis sign & Rotate the robot by hand and verify yaw-rate sign in ROS. \\
+Vibration & Drive slowly on the floor and check if motor vibration creates spikes.  If yes, improve mounting and tune filter covariance. \\
+Timestamp stability & IMU and odom messages should arrive with stable intervals.  Irregular bursts indicate serial parsing or firmware timing issues. \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\section{Why the IMU does not replace wheel odometry}
+An accelerometer integrated twice drifts quickly.  A gyro integrated once also drifts.  Encoders slip, but they are usually better for short-term planar translation.  The engineering solution is not choosing one sensor; it is fusing both sensors and monitoring when they disagree.
