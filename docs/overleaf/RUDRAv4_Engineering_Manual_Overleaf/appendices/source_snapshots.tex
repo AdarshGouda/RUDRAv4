@@ -18,6 +18,32 @@ This appendix includes representative source snapshots from the workspace used t
 
 \lstinputlisting[language=Python,caption={Teensy telemetry parser},label={lst:telemetry-node}]{code/teensy_telemetry.py}
 
+\section{DCDC-USB monitor node}
+
+\lstinputlisting[language=Python,caption={DCDC-USB NUC power monitor},label={lst:dcdc-monitor-node}]{code/dcdc_usb_monitor.py}
+
+\section{DCDC-USB monitor launch}
+
+\lstinputlisting[language=Python,caption={DCDC-USB monitor launch file},label={lst:dcdc-monitor-launch}]{code/dcdc_usb_monitor.launch.py}
+
+\section{Current hardware configuration}
+
+\lstinputlisting[language={},caption={RUDRAv4 hardware configuration snapshot},label={lst:hardware-config-snapshot}]{code/rudra_v4_hardware.yaml}
+
+\section{Current localization configuration}
+
+\lstinputlisting[language={},caption={Robot localization EKF configuration snapshot},label={lst:ekf-config-snapshot}]{code/localization_ekf.yaml}
+
+\section{Current YDLIDAR configuration}
+
+\lstinputlisting[language={},caption={YDLIDAR G2B configuration snapshot},label={lst:ydlidar-config-snapshot}]{code/ydlidar_g2b.yaml}
+
+\section{Bringup wrapper scripts}
+
+\lstinputlisting[language=bash,caption={PS2 LiDAR localization wrapper},label={lst:ps2-lidar-localization-wrapper}]{code/run_ps2_lidar_localization.sh}
+
+\lstinputlisting[language=bash,caption={DCDC-USB utility installer},label={lst:dcdc-installer-wrapper}]{code/install_dcdc_usb_tool.sh}
+
 \section{Uno firmware}
 
 \lstinputlisting[language=C++,caption={Uno PS2 plain serial firmware},label={lst:uno-firmware}]{code/uno_ps2_plain_serial.ino}

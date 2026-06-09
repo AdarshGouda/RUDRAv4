@@ -84,7 +84,7 @@ IMU,ax,ay,az,gx,gy,gz
 ODOM,x,y,theta,linear_x,angular_z,left_vel,right_vel
 \end{lstlisting}
 
-This is important. The telemetry firmware is backward-compatible with the ROS bridge because the NUC already drains Teensy serial lines and routes telemetry lines to \topic{/rudra/imu_raw} and \topic{/rudra/wheel_odom}. Non-telemetry lines remain available as \topic{/rudra/teensy_ack}.
+This is important. The telemetry firmware is backward-compatible with the ROS bridge because the NUC already drains Teensy serial lines and routes telemetry lines to \topic{/rudra/imu/raw} and \topic{/rudra/wheel_odom}. Non-telemetry lines remain available as \topic{/rudra/teensy_ack}.
 
 \section{IMU scale and encoder scale}
 

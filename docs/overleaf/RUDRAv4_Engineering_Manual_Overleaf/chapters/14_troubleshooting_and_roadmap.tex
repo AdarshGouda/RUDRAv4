@@ -35,7 +35,7 @@ Motor moves wrong direction & First check wiring/motor polarity. Then check left
 No \topic{/scan} & Source \filep{/home/rudra/ros2_ws/install/setup.bash}, verify LiDAR by-id path, wait 10--15 seconds after launch.\\
 RViz sees \topic{/scan} but displays nothing & Set LaserScan reliability to Best Effort and fixed frame to \cmd{base_link} or \cmd{odom} as appropriate.\\
 Obstacle guard never changes & Confirm \topic{/scan} publishes, guard enabled, marker frame is \cmd{laser}, and object is inside front cone.\\
-No \topic{/rudra/imu_raw} or \topic{/rudra/wheel_odom} & Flash telemetry Teensy firmware and ensure \param{publish_teensy_telemetry} is true.\\
+No \topic{/rudra/imu/raw} or \topic{/rudra/wheel_odom} & Flash telemetry Teensy firmware and ensure \param{publish_teensy_telemetry} is true.\\
 No \topic{/odometry/filtered} & Install/launch \pkg{robot_localization}, check EKF config, and confirm input topics exist.\\
 DCDC monitor stale & Verify \cmd{dcdc-usb -a} works outside ROS and USB permissions are correct.\\
 \bottomrule
@@ -70,4 +70,4 @@ RUDRAv4 is now a suitable foundation for staged improvements. The recommended or
 
 \section{Future book additions}
 
-This manual can be extended with dedicated chapters for URDF, robot state publisher, wheel PID tuning, SLAM Toolbox, Nav2 costmaps, behavior trees, remote development over SSH, and data logging. Those chapters should be added only after the corresponding implementation exists in the workspace, so the manual remains a source of truth rather than a wish list.
+This manual can be extended with dedicated chapters for URDF, robot state publisher, wheel PID tuning, SLAM Toolbox, Nav2 costmaps, behavior trees, remote development over SSH, and data logging. Those chapters should be added only after the corresponding implementation exists in the workspace, so the manual remains a source of truth rather than a wish list. The current navigation theory chapter defines the readiness criteria for that next expansion.

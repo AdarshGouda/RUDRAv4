@@ -54,6 +54,8 @@ The ROS bridge converts these into:
 
 The IMU message intentionally leaves orientation unset by setting \cmd{orientation_covariance[0] = -1.0}. That tells downstream consumers that orientation is not available from this message.
 
+That convention is important. A ROS IMU message with an arbitrary quaternion can be worse than no orientation at all, because downstream filters may treat it as a real attitude measurement. RUDRAv4 publishes raw acceleration and angular velocity first, then lets the EKF choose only the measurement components that are trustworthy for the current robot.
+
 \section{Wheel odometry from encoder telemetry}
 
 Wheel odometry is the robot's short-term estimate based on wheel motion. It is locally smooth but can drift because of wheel slip, floor irregularity, unequal wheel radius, encoder count errors, and unmodeled skid-steer effects. The mathematical basis was introduced in \cref{eq:pose-derivative}. For implementation, the robot integrates:
@@ -69,6 +71,8 @@ This produces the \topic{/rudra/wheel_odom} message.
 \section{IMU telemetry}
 
 The MPU6050 provides acceleration and gyro readings. Gyro yaw rate is useful for correcting short-term yaw motion, but integrating gyro alone drifts over time. Acceleration is noisy and includes gravity components. Therefore, raw IMU is useful but should not be trusted alone for global pose.
+
+The Teensy estimates gyro and accelerometer biases during startup by averaging stationary samples. Bias removal improves short-term behavior, but it is not a complete inertial navigation solution. Gyro bias changes with temperature, vibration, mounting stress, and supply noise. The correct use of this sensor in RUDRAv4 is therefore incremental: use yaw rate to stabilize local odometry, not to claim global heading.
 
 \section{EKF fusion}
 
@@ -93,6 +97,24 @@ A simplified EKF model can be written as:
 \end{align}
 
 where \(\mathbf{x}\) is the state estimate, \(\mathbf{z}\) is the measurement vector, \(\mathbf{w}\) is process noise, and \(\mathbf{v}\) is measurement noise. RUDRA's practical EKF value is not mathematical complexity; it is the disciplined combination of wheel and IMU signals into one consistent odometry output.
+
+\subsection{Covariance as trust}
+
+In ROS localization, covariance is how the system communicates uncertainty. Small covariance tells the filter that a measurement is trusted. Large covariance tells the filter that the measurement is noisy. A missing or overconfident covariance can destabilize fusion even when the raw numbers look plausible.
+
+RUDRAv4 starts with conservative fixed covariances in the bridge:
+
+\begin{itemize}
+  \item IMU orientation covariance begins with \(-1\), meaning orientation is intentionally absent.
+  \item IMU angular velocity covariance is small enough to use yaw rate, but not zero.
+  \item Wheel odometry pose and twist covariances are nonzero because encoder odometry drifts and slips.
+\end{itemize}
+
+These values are engineering starting points. Tune them from logs: if fused yaw follows wheel slip too aggressively, reduce trust in wheel yaw; if fused yaw follows gyro drift too aggressively, reduce trust in IMU yaw rate.
+
+\subsection{Two-dimensional mode}
+
+The robot is a ground rover. It does not need to estimate altitude, roll, pitch, or lateral velocity for the current base-localization problem. The EKF therefore runs in two-dimensional mode. This reduces state ambiguity and avoids letting weak measurements corrupt unused degrees of freedom.
 
 \section{Why publish TF outside the EKF}
 

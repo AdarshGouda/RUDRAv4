@@ -36,6 +36,8 @@ bash scripts/run_lidar.sh
 bash scripts/view_lidar.sh
 bash scripts/view_localization.sh
 ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
+  enable_dcdc_monitor:=true
 \end{lstlisting}
 
 \section{Topic monitors}
@@ -51,6 +53,16 @@ ros2 topic echo --once /scan
 ros2 topic echo --once /rudra/imu/raw
 ros2 topic echo --once /rudra/wheel_odom
 ros2 topic echo --once /odometry/filtered
+ros2 topic echo /tf
+ros2 topic echo /rudra/nuc_battery
+ros2 topic echo /diagnostics
+\end{lstlisting}
+
+\section{DCDC-USB checks}
+
+\begin{lstlisting}[language=bash]
+bash scripts/install_dcdc_usb_tool.sh
+dcdc-usb -a
 ros2 topic echo /rudra/nuc_battery
 ros2 topic echo /diagnostics
 \end{lstlisting}

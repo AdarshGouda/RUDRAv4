@@ -22,6 +22,7 @@ Mode & Use when & Command\\
 PS2 only & Basic manual drive without LiDAR driver & \cmd{bash scripts/run_ps2_bridge.sh}\\
 PS2 + LiDAR & Manual driving with \topic{/scan} and obstacle guard & \cmd{bash scripts/run_ps2_lidar_bridge.sh}\\
 PS2 + LiDAR + localization & Full development bringup with IMU/wheel odom and EKF & \cmd{bash scripts/run_ps2_lidar_localization.sh}\\
+PS2 + LiDAR + localization + DCDC & Full robot bringup with NUC power diagnostics & \cmd{ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true}\\
 \topic{/cmd_vel} bridge & Keyboard teleop, Nav2, autonomy, or external command publisher & \cmd{bash scripts/run_cmd_vel_bridge.sh}\\
 LiDAR only & Sensor and RViz debug without drive bridge & \cmd{bash scripts/run_lidar.sh}\\
 DCDC monitor only & Power rail debug & \cmd{ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py}\\
@@ -43,6 +44,13 @@ source /opt/ros/lyrical/setup.bash
 source /home/rudra/ros2_ws/install/setup.bash
 source install/setup.bash
 bash scripts/run_ps2_lidar_localization.sh
+\end{lstlisting}
+
+With the DCDC-USB powering the NUC, use the same launch file with the monitor enabled:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
+  enable_dcdc_monitor:=true
 \end{lstlisting}
 
 On Aghora:
@@ -71,6 +79,7 @@ ros2 topic echo --once /scan
 ros2 topic echo --once /rudra/imu/raw
 ros2 topic echo --once /rudra/wheel_odom
 ros2 topic echo --once /odometry/filtered
+ros2 topic echo /tf
 ros2 topic echo /rudra/nuc_battery
 ros2 topic echo /diagnostics
 \end{lstlisting}
@@ -86,11 +95,29 @@ Observation & Interpretation\\
 \topic{/rudra/teensy_ack} echoes \cmd{ACK,...} & Teensy is receiving drive commands.\\
 \topic{/scan} publishes with frame \cmd{laser} & YDLIDAR driver is healthy enough for RViz and guard.\\
 \topic{/rudra/obstacle_guard} changes when an obstacle is placed ahead & Scan reaches guard and forward scale logic is active.\\
-\topic{/rudra/imu_raw} and \topic{/rudra/wheel_odom} publish & Telemetry firmware and parser are active.\\
+\topic{/rudra/imu/raw} and \topic{/rudra/wheel_odom} publish & Telemetry firmware and parser are active.\\
 \topic{/odometry/filtered} publishes & EKF has inputs and is alive.\\
+\topic{/tf} includes \cmd{odom -> base_link} & RViz can place odom, scan, and robot body in the same tree.\\
+\topic{/rudra/nuc_battery} publishes & DCDC-USB monitor sees the NUC power rail.\\
+\topic{/diagnostics} contains \cmd{rudra_nuc_dcdc} & NUC input voltage, output range, and sag warnings are visible.\\
 RViz displays scan and marker & DDS domain, TF, and display settings are correct.\\
 \bottomrule
 \end{longtable}
+
+\section{RViz views}
+
+The package includes two RViz views:
+
+\begin{longtable}{p{0.28\linewidth}p{0.62\linewidth}}
+\toprule
+View & Purpose\\
+\midrule
+\cmd{lidar_view.launch.py} & Displays \topic{/scan} and the obstacle marker with fixed frame \cmd{base_link}. Use it for sensor and guard debugging.\\
+\cmd{localization_view.launch.py} & Displays raw wheel odom, fused odom, scan, obstacle marker, and TF with fixed frame \cmd{odom}. Use it for localization and navigation readiness checks.\\
+\bottomrule
+\end{longtable}
+
+RViz does not start the robot. It is a viewer. The robot-side launch must already be publishing the topics that the view consumes.
 
 \section{Shutdown}
 

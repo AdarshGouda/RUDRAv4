@@ -1,0 +1,150 @@
+\chapter{Navigation, Autonomy, and Systems Theory}
+
+\section{What navigation means in RUDRAv4 today}
+
+RUDRAv4 currently implements the layers that make navigation possible:
+
+\begin{itemize}
+  \item a bounded base command path from PS2 or \topic{/cmd_vel} to the Teensy,
+  \item a LiDAR driver publishing \topic{/scan} in the \cmd{laser} frame,
+  \item a local obstacle guard that modifies unsafe forward commands,
+  \item wheel odometry and IMU telemetry from the Teensy,
+  \item an EKF that publishes \topic{/odometry/filtered},
+  \item a TF tree that lets RViz and later planners reason about geometry,
+  \item DCDC-USB diagnostics for the NUC power rail.
+\end{itemize}
+
+It does not yet include a checked-in full Nav2 launch that performs global planning,
+local planning, recovery behavior, and goal execution. That is an intentional staging
+choice. A navigation stack should be added only after the base can repeatedly prove
+that \topic{/scan}, \topic{/odometry/filtered}, \cmd{odom -> base_link}, and the
+\topic{/cmd_vel} bridge are stable.
+
+\section{The autonomy stack as layered contracts}
+
+Autonomy is easiest to debug when each layer has a contract:
+
+\begin{longtable}{p{0.22\linewidth}p{0.34\linewidth}p{0.34\linewidth}}
+\toprule
+Layer & Contract & RUDRAv4 implementation\\
+\midrule
+Power & Keep the onboard computer alive and observable. & DCDC-USB, \topic{/rudra/nuc_battery}, \topic{/diagnostics}.\\
+Actuation & Convert bounded commands into motor driver packets. & Teensy, Sabertooth packet serial, command timeout.\\
+Manual authority & Allow a human to command and stop the robot. & Uno PS2 packet stream and \pkg{ps2_uno_to_teensy}.\\
+Perception & Publish range data in a known frame. & YDLIDAR G2B on \topic{/scan}.\\
+Reactive safety & Reduce or block unsafe forward motion. & \pkg{LidarObstacleGuard}.\\
+State estimation & Publish locally continuous robot motion. & wheel odom, IMU yaw rate, \pkg{robot_localization}.\\
+Visualization & Make geometry and health visible to the operator. & RViz views, TF, diagnostics.\\
+Planning & Turn maps and goals into velocity commands. & future Nav2 or SLAM layer publishing \topic{/cmd_vel}.\\
+\bottomrule
+\end{longtable}
+
+This structure matters because failures become local. If RViz shows no scan, the
+problem is not the Sabertooth. If \topic{/cmd_vel} is correct but the Teensy is silent,
+the problem is at the serial bridge or firmware boundary. If the DCDC diagnostics warn
+about input sag, the robot may still drive correctly, but the compute rail is no longer
+trustworthy enough for long autonomous runs.
+
+\section{Perception: LaserScan as geometry}
+
+A \cmd{LaserScan} is a polar measurement:
+
+\begin{equation}
+p_i =
+\begin{bmatrix}
+r_i\cos\theta_i\\
+r_i\sin\theta_i
+\end{bmatrix},
+\qquad
+\theta_i = \theta_{min} + i\Delta\theta.
+\end{equation}
+
+The scan is useful only when its frame is known. RUDRAv4 publishes the scan in
+\cmd{laser} and uses a static transform from \cmd{base_link} to \cmd{laser}. The
+obstacle guard is intentionally simpler than a planner: it examines a front cone,
+finds valid finite ranges, and uses the closest obstacle to scale or block forward
+motion. This gives immediate local protection without needing a map.
+
+\section{State estimation: odom is not map}
+
+\cmd{odom} is locally continuous. It should not jump. Wheel odometry and IMU yaw rate
+are good sources for this frame because they are high-rate and smooth. They drift,
+but they drift continuously. A future \cmd{map} frame solves a different problem:
+global consistency. SLAM or localization can correct drift by publishing
+\cmd{map -> odom}. The separation is:
+
+\begin{equation}
+\cmd{map} \rightarrow \cmd{odom} \rightarrow \cmd{base_link}.
+\end{equation}
+
+RUDRAv4 should therefore validate \cmd{odom -> base_link} before introducing
+\cmd{map -> odom}. If the local frame is unstable, a global localization layer will
+hide the problem until the planner behaves unpredictably.
+
+\section{Control: open-loop command, closed-loop roadmap}
+
+The current base is command-bounded but not wheel-speed closed-loop. That means
+\topic{/cmd_vel} is converted to left/right Sabertooth command magnitudes, and the
+Teensy ramps those commands to reduce abrupt changes. Encoders report what happened,
+but they do not yet correct the motor output.
+
+A later PID layer would change the contract. Instead of commanding motor effort
+directly, the firmware would command target wheel velocity:
+
+\begin{align}
+e(t) &= v_{target}(t)-v_{measured}(t),\\
+u(t) &= K_p e(t)+K_i\int e(t)\,dt+K_d\frac{de(t)}{dt}.
+\end{align}
+
+The design should add PID only after encoder sign, counts-per-revolution, wheel radius,
+track width, and serial timing are all validated. Otherwise the controller will amplify
+calibration errors.
+
+\section{Navigation readiness criteria}
+
+Before adding Nav2 or a SLAM launch, RUDRAv4 should pass the following checks:
+
+\begin{enumerate}
+  \item \topic{/scan} publishes continuously and appears in RViz with fixed frame \cmd{base_link}.
+  \item \topic{/rudra/wheel_odom} changes correctly when the robot moves forward, reverses, and rotates.
+  \item \topic{/rudra/imu/raw} reports plausible yaw rate while rotating in place.
+  \item \topic{/odometry/filtered} remains stable while stationary and moves smoothly while driving.
+  \item TF contains \cmd{odom -> base_link -> laser} and \cmd{base_link -> imu_link}.
+  \item The obstacle guard reports \cmd{clear}, \cmd{slowing}, and \cmd{blocked} in predictable physical situations.
+  \item The \topic{/cmd_vel} bridge can stop the robot on timeout.
+  \item \topic{/diagnostics} reports nominal DCDC output and no sustained input voltage sag.
+\end{enumerate}
+
+\section{Operational launch pattern}
+
+The current full robot-side bringup for manual development is:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
+  enable_dcdc_monitor:=true
+\end{lstlisting}
+
+The current RViz-side view on Aghora is:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+export ROS_DOMAIN_ID=42
+export ROS_LOCALHOST_ONLY=0
+source install/setup.bash
+ros2 launch rudra_base_bridge localization_view.launch.py
+\end{lstlisting}
+
+For autonomy, stop the PS2 bridge and start the \topic{/cmd_vel} bridge. Then run the
+planner or teleop node that publishes \topic{/cmd_vel}. Do not allow two nodes to own
+the Teensy serial port at the same time.
+
+\begin{safetybox}{Autonomy gate}
+Autonomous navigation should be treated as a privilege earned by the lower layers. If
+manual control, scan geometry, TF, odometry, and power diagnostics are not boringly
+reliable, a planner will simply move the uncertainty into a faster part of the system.
+\end{safetybox}
