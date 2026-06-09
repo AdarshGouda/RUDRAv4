@@ -1,0 +1,54 @@
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {1.1}{\ignorespaces RUDRAv4 layered control architecture. ROS 2 lives on the NUC; the Uno, Teensy, and DCDC-USB remain hardware interface endpoints.}}{1}{figure.caption.6}%
+\contentsline {figure}{\numberline {1.2}{\ignorespaces RUDRA chassis and internal electronics. This manual keeps the same modular hardware intent while documenting the current NUC-based RUDRAv4 software stack.}}{3}{figure.caption.7}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {2.1}{\ignorespaces RUDRAv4 hardware command chain from operator input to motor actuation.}}{6}{figure.caption.8}%
+\contentsline {figure}{\numberline {2.2}{\ignorespaces Sabertooth references retained as visual aids. RUDRAv4 uses the same addresses and single-wire packet serial principle.}}{7}{figure.caption.9}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {3.1}{\ignorespaces ROS graph concept for manual driving. The node reads serial, publishes observability topics, applies LiDAR filtering, and writes final drive packets.}}{9}{figure.caption.10}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {5.1}{\ignorespaces Differential-drive motion modes: straight, turn, rotate, and spin-in-place behavior.}}{20}{figure.caption.12}%
+\contentsline {figure}{\numberline {5.2}{\ignorespaces Differential-drive coordinate frame and wheel-speed notation.}}{22}{figure.caption.13}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {6.1}{\ignorespaces DCDC-USB is the NUC rail monitor and regulator; drivetrain power remains a separate safety-critical path.}}{25}{figure.caption.14}%
+\contentsline {figure}{\numberline {6.2}{\ignorespaces Linear state-of-charge estimate used for the NUC DCDC input monitor.}}{27}{figure.caption.15}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {8.1}{\ignorespaces Sabertooth motor-driver wiring concept preserved from the RUDRA article assets.}}{33}{figure.caption.17}%
+\contentsline {figure}{\numberline {8.2}{\ignorespaces Command path from ROS to the two Sabertooth motor-driver addresses. The diagram is redrawn in a compact vertical layout to keep all labels legible.}}{34}{figure.caption.18}%
+\contentsline {figure}{\numberline {8.3}{\ignorespaces Sabertooth address setup reference from the original RUDRA material. Verify against the current Dimension Engineering user guide before changing switch positions.}}{35}{figure.caption.19}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {9.1}{\ignorespaces Firmware note from legacy assets: the Teensy uses a hardware serial port for Sabertooth communication while USB serial remains available to the NUC.}}{37}{figure.caption.20}%
+\contentsline {figure}{\numberline {9.2}{\ignorespaces PS2 controller with Arduino reference image from the RUDRA article assets.}}{38}{figure.caption.21}%
+\contentsline {figure}{\numberline {9.3}{\ignorespaces Microcontroller timing and ownership boundaries. The NUC supervises ROS-side behavior, while the Teensy remains the deterministic motor-control endpoint.}}{40}{figure.caption.22}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {12.1}{\ignorespaces RUDRA chassis and deck layout reference from the engineering asset set.}}{48}{figure.caption.24}%
+\contentsline {figure}{\numberline {12.2}{\ignorespaces Detailed RUDRA base wiring reference: Teensy, Sabertooths, motors, IMU, encoder wiring, and power distribution.}}{50}{figure.caption.26}%
+\contentsline {figure}{\numberline {12.3}{\ignorespaces RUDRA hardware BOM screenshot supplied with this revision. Keep the spreadsheet/source BOM under version control for exact part numbers, quantities, prices, and links.}}{50}{figure.caption.27}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {13.1}{\ignorespaces RUDRAv4 Sheet 1 of 2: system interconnect and power architecture. This sheet shows the NUC power branch through the Mini-Box DCDC-USB, the motor power branch through the Sabertooth drivers, the NUC USB wiring to Teensy/Uno/YDLIDAR/DCDC-USB, and the high-level control and communication architecture.}}{53}{figure.caption.28}%
+\contentsline {figure}{\numberline {13.2}{\ignorespaces RUDRAv4 Sheet 2 of 2: detailed controller, encoder, and sensor wiring. This sheet documents the implemented Teensy pin mapping, shared packetized-serial Sabertooth S1 bus, optional S2 e-stop concept, motor/encoder wiring, MPU6050 I2C wiring, and Arduino Uno PS2 receiver pin mapping.}}{54}{figure.caption.29}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {15.1}{\ignorespaces Firmware data contracts. The NUC is the translation layer between joystick packets, ROS topics, and drive packets.}}{60}{figure.caption.30}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {16.1}{\ignorespaces Launch dependency tree for the full manual, LiDAR, localization, and optional power-monitor bringup.}}{64}{figure.caption.31}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {17.1}{\ignorespaces Command timeout model. If fresh commands stop for more than about 300 ms, the Teensy disables drive.}}{68}{figure.caption.32}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {18.1}{\ignorespaces Manual bridge processing pipeline, redrawn with wider nodes and clearer spacing for print readability.}}{69}{figure.caption.33}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {19.1}{\ignorespaces Obstacle guard geometry. Only finite scan points inside the configured front cone are considered.}}{73}{figure.caption.34}%
+\contentsline {figure}{\numberline {19.2}{\ignorespaces Forward-speed scaling used by the obstacle guard.}}{74}{figure.caption.35}%
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {20.1}{\ignorespaces RUDRAv4 TF tree. The map frame is not required for base bringup; it is introduced when SLAM is stable.}}{76}{figure.caption.36}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\contentsline {figure}{\numberline {23.1}{\ignorespaces First-level troubleshooting split. Do not debug ROS until power and serial identity are known.}}{88}{figure.caption.37}%
+\addvspace {10\p@ }
+\addvspace {10\p@ }
+\addvspace {10\p@ }
