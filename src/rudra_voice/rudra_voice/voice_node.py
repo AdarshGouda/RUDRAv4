@@ -12,7 +12,6 @@ from diagnostic_msgs.msg import DiagnosticArray
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
 import rclpy
-from rclpy._rclpy_pybind11 import RCLError
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import LaserScan
@@ -34,11 +33,14 @@ from .stt_vosk import VoskSpeechToText
 from .tts import make_tts_backend
 
 
+DEFAULT_MOTION_DURATION_SEC = 5.0
+
+
 MOTION_COMMANDS = {
-    'move_forward_slow': (0.08, 0.0),
-    'move_backward_slow': (-0.06, 0.0),
-    'turn_left_slow': (0.0, 0.35),
-    'turn_right_slow': (0.0, -0.35),
+    'move_forward_slow': (0.95, 0.0),
+    'move_backward_slow': (-0.95, 0.0),
+    'turn_left_slow': (0.0, 0.95),
+    'turn_right_slow': (0.0, -0.95),
     'stop': (0.0, 0.0),
     'emergency_stop': (0.0, 0.0),
 }
@@ -77,7 +79,13 @@ class RudraVoiceNode(Node):
         self.declare_parameter('listen_while_speaking', False)
         self.declare_parameter('motion.enable_voice_motion', True)
         self.declare_parameter('motion.publish_topic', '/cmd_vel_voice_request')
-        self.declare_parameter('motion.default_motion_duration_sec', 1.0)
+        self.declare_parameter('motion.max_linear_x', 1.0)
+        self.declare_parameter('motion.max_reverse_x', -1.0)
+        self.declare_parameter('motion.max_angular_z', 3.0)
+        self.declare_parameter(
+            'motion.default_motion_duration_sec',
+            DEFAULT_MOTION_DURATION_SEC,
+        )
 
         self.wake_phrase = str(self.get_parameter('wake_phrase').value)
         self.wake_aliases = [
@@ -101,6 +109,9 @@ class RudraVoiceNode(Node):
             self.get_parameter('motion.enable_voice_motion').value
         )
         self.motion_topic = str(self.get_parameter('motion.publish_topic').value)
+        self.max_linear_x = abs(float(self.get_parameter('motion.max_linear_x').value))
+        self.max_reverse_x = -abs(float(self.get_parameter('motion.max_reverse_x').value))
+        self.max_angular_z = abs(float(self.get_parameter('motion.max_angular_z').value))
 
         self.transcript_pub = self.create_publisher(String, '/rudra_voice/transcript', 10)
         self.intent_pub = self.create_publisher(String, '/rudra_voice/intent', 10)
@@ -292,11 +303,22 @@ class RudraVoiceNode(Node):
         if not self.voice_motion_enabled:
             self._publish_status('voice motion disabled by configuration')
             return
-        linear_x, angular_z = MOTION_COMMANDS.get(intent.skill, (0.0, 0.0))
+        linear_x, angular_z = self._motion_command_for_skill(intent.skill)
         msg = Twist()
         msg.linear.x = linear_x
         msg.angular.z = angular_z
         self.voice_twist_pub.publish(msg)
+
+    def _motion_command_for_skill(self, skill: str) -> tuple[float, float]:
+        if skill == 'move_forward_slow':
+            return self.max_linear_x, 0.0
+        if skill == 'move_backward_slow':
+            return self.max_reverse_x, 0.0
+        if skill == 'turn_left_slow':
+            return 0.0, self.max_angular_z
+        if skill == 'turn_right_slow':
+            return 0.0, -self.max_angular_z
+        return MOTION_COMMANDS.get(skill, (0.0, 0.0))
 
     def handle_non_motion_skill(self, intent: IntentResult) -> None:
         """Publish useful status for non-motion voice skills."""
@@ -346,7 +368,7 @@ def main(args: Optional[list[str]] = None) -> None:
         node.shutdown_requested = True
         try:
             node.destroy_node()
-        except (KeyboardInterrupt, RCLError, RuntimeError) as exc:
+        except (KeyboardInterrupt, RuntimeError) as exc:
             if rclpy.ok():
                 node.get_logger().debug(f'Node destroy interrupted during shutdown: {exc}')
         if rclpy.ok():

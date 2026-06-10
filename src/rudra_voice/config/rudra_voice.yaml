@@ -19,7 +19,7 @@ voice_node:
     vosk_model_path: "~/Projects/RUDRAv4/models/vosk-model-small-en-us-0.15"
     ollama_url: "http://localhost:11434/api/chat"
     ollama_model: "qwen2.5:3b"
-    ollama_timeout_sec: 15.0
+    ollama_timeout_sec: 60.0
     use_llm_router: true
     tts_backend: "piper"
     tts_espeak_voice: "en-us+f3"
@@ -38,10 +38,10 @@ voice_node:
       enable_voice_motion: true
       publish_topic: "/cmd_vel_voice_request"
       safe_output_topic: "/cmd_vel_safe"
-      max_linear_x: 0.08
-      max_reverse_x: -0.06
-      max_angular_z: 0.35
-      default_motion_duration_sec: 1.0
+      max_linear_x: 1.0
+      max_reverse_x: -1.0
+      max_angular_z: 3.0
+      default_motion_duration_sec: 5.0
       require_timeout: true
       allow_continuous_motion: false
       ps2_manual_override_enabled: true
@@ -51,17 +51,17 @@ command_guard_node:
     joy_topic: "/joy"
     ps2_raw_topic: "/rudra/ps2_raw"
     ps2_raw_axis_center: 127
-    ps2_raw_deadband: 15
+    ps2_raw_deadband: 25
     motion:
       enable_voice_motion: true
       publish_topic: "/cmd_vel_voice_request"
       safe_output_topic: "/cmd_vel_safe"
-      max_linear_x: 0.08
-      max_reverse_x: -0.06
-      max_angular_z: 0.35
-      default_motion_duration_sec: 1.0
+      max_linear_x: 1.0
+      max_reverse_x: -1.0
+      max_angular_z: 3.0
+      default_motion_duration_sec: 5.0
       require_timeout: true
       allow_continuous_motion: false
       ps2_manual_override_enabled: true
       manual_override_timeout_sec: 0.35
-      manual_override_deadband: 0.05
+      manual_override_deadband: 0.25

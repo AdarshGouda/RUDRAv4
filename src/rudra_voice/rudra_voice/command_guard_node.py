@@ -8,13 +8,42 @@ from typing import Optional
 
 from geometry_msgs.msg import Twist
 import rclpy
-from rclpy._rclpy_pybind11 import RCLError
 from rclpy.node import Node
 from sensor_msgs.msg import Joy
 from std_msgs.msg import String
 
 from .intent_parser import APPROVED_MOTION_SKILLS
-from .tts import make_tts_backend
+
+
+DEFAULT_MOTION_DURATION_SEC = 5.0
+
+
+def has_meaningful_manual_input(
+    axes: Optional[list[float] | tuple[float, ...]],
+    buttons: Optional[list[int] | tuple[int, ...]],
+    deadband: float,
+    noise_floor: float = 0.25,
+) -> bool:
+    """Return True only when the PS2 sticks or buttons clearly indicate manual input."""
+    effective_deadband = max(float(deadband), float(noise_floor))
+    axis_values = tuple(float(axis) for axis in (axes or ()))
+    button_values = tuple(int(button) for button in (buttons or ()))
+
+    return any(abs(axis) > effective_deadband for axis in axis_values) or any(
+        button != 0 for button in button_values
+    )
+
+
+def has_meaningful_ps2_raw_input(
+    axes: Optional[list[int] | tuple[int, ...]],
+    axis_center: int,
+    deadband: int,
+    noise_floor: int = 25,
+) -> bool:
+    """Treat small raw PS2 stick jitter as idle, not manual motion."""
+    effective_deadband = max(int(deadband), int(noise_floor))
+    axis_values = tuple(int(axis) for axis in (axes or ()))
+    return any(abs(axis - axis_center) > effective_deadband for axis in axis_values)
 
 
 class CommandGuardNode(Node):
@@ -25,10 +54,13 @@ class CommandGuardNode(Node):
 
         self.declare_parameter('motion.publish_topic', '/cmd_vel_voice_request')
         self.declare_parameter('motion.safe_output_topic', '/cmd_vel_safe')
-        self.declare_parameter('motion.max_linear_x', 0.08)
-        self.declare_parameter('motion.max_reverse_x', -0.06)
-        self.declare_parameter('motion.max_angular_z', 0.35)
-        self.declare_parameter('motion.default_motion_duration_sec', 1.0)
+        self.declare_parameter('motion.max_linear_x', 1.0)
+        self.declare_parameter('motion.max_reverse_x', -1.0)
+        self.declare_parameter('motion.max_angular_z', 3.0)
+        self.declare_parameter(
+            'motion.default_motion_duration_sec',
+            DEFAULT_MOTION_DURATION_SEC,
+        )
         self.declare_parameter('motion.require_timeout', True)
         self.declare_parameter('motion.ps2_manual_override_enabled', True)
         self.declare_parameter('motion.manual_override_timeout_sec', 0.35)
@@ -93,7 +125,6 @@ class CommandGuardNode(Node):
         self.last_intent = ''
         self.emergency_stop_latched = False
         self.last_manual_input_time = 0.0
-        self.tts = make_tts_backend(backend='espeak')
 
         self.timer = self.create_timer(0.05, self.loop)
 
@@ -114,9 +145,11 @@ class CommandGuardNode(Node):
     def joy_callback(self, msg: Joy) -> None:
         if not self.ps2_override_enabled:
             return
-        axes_active = any(abs(axis) > self.manual_override_deadband for axis in msg.axes)
-        buttons_active = any(button != 0 for button in msg.buttons)
-        if axes_active or buttons_active:
+        if has_meaningful_manual_input(
+            msg.axes,
+            msg.buttons,
+            self.manual_override_deadband,
+        ):
             self.last_manual_input_time = time.monotonic()
 
     def ps2_raw_callback(self, msg: String) -> None:
@@ -126,9 +159,10 @@ class CommandGuardNode(Node):
         if parsed is None:
             return
         select, axes = parsed
-        axes_active = any(
-            abs(axis - self.ps2_raw_axis_center) > self.ps2_raw_deadband
-            for axis in axes
+        axes_active = has_meaningful_ps2_raw_input(
+            axes,
+            self.ps2_raw_axis_center,
+            self.ps2_raw_deadband,
         )
         if select or axes_active:
             self.last_manual_input_time = time.monotonic()
@@ -158,7 +192,6 @@ class CommandGuardNode(Node):
             self.reply_pub.publish(String(data=reply))
             self.status_pub.publish(String(data=reply))
             self.get_logger().warning(reply)
-            self.tts.speak_async(reply)
             self.publish_zero('manual_override')
             return
 
@@ -198,7 +231,7 @@ class CommandGuardNode(Node):
         try:
             self.safe_pub.publish(Twist())
             self.status_pub.publish(String(data=f'voice guard zero: {reason}'))
-        except (RCLError, RuntimeError) as exc:
+        except RuntimeError as exc:
             self.get_logger().debug(f'Skipping zero publish during shutdown: {exc}')
 
     def loop(self) -> None:
@@ -220,7 +253,7 @@ def main(args: Optional[list[str]] = None) -> None:
             node.publish_zero('shutdown')
         try:
             node.destroy_node()
-        except (KeyboardInterrupt, RCLError, RuntimeError) as exc:
+        except (KeyboardInterrupt, RuntimeError) as exc:
             if rclpy.ok():
                 node.get_logger().debug(f'Node destroy interrupted during shutdown: {exc}')
         if rclpy.ok():

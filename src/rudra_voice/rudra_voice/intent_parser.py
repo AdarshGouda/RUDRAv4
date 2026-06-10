@@ -84,16 +84,19 @@ class IntentResult:
 COMMAND_PATTERNS: tuple[tuple[tuple[str, ...], str, str], ...] = (
     (('emergency stop',), 'emergency_stop', 'Emergency stop. Motors stay locked out.'),
     (('stop',), 'stop', 'Stopping now.'),
-    (('move forward', 'go forward', 'forward'), 'move_forward_slow', 'Moving forward for one second.'),
-    (('move backward', 'go backward', 'reverse', 'back'), 'move_backward_slow', 'Backing up for one second.'),
-    (('turn left', 'left'), 'turn_left_slow', 'Turning left for one second.'),
-    (('turn right', 'right'), 'turn_right_slow', 'Turning right for one second.'),
+    (('move forward', 'go forward', 'forward'), 'move_forward_slow', 'Moving forward for five seconds.'),
+    (('move backward', 'go backward', 'reverse', 'back'),
+     'move_backward_slow', 'Backing up for five seconds.'),
+    (('turn left', 'left'), 'turn_left_slow', 'Turning left for five seconds.'),
+    (('turn right', 'right'), 'turn_right_slow', 'Turning right for five seconds.'),
     (('run self test',), 'run_self_test', 'Starting a quick self check.'),
     (('check lidar',), 'check_lidar', 'Checking lidar now.'),
     (('check teensy',), 'check_teensy', 'Checking the Teensy link.'),
     (('check controller', 'check ps2'), 'check_controller', 'Checking manual controller activity.'),
-    (('bring up level one', 'bringup level one', 'bring up level 1'), 'bringup_level_1', 'Bringup level one requested.'),
-    (('bring up level two', 'bringup level two', 'bring up level 2'), 'bringup_level_2', 'Bringup level two requested.'),
+    (('bring up level one', 'bringup level one', 'bring up level 1'),
+     'bringup_level_1', 'Bringup level one requested.'),
+    (('bring up level two', 'bringup level two', 'bring up level 2'),
+     'bringup_level_2', 'Bringup level two requested.'),
     (('shut down', 'shutdown'), 'shutdown', 'Shutdown requested. Please confirm from the operator terminal.'),
     (('status',), 'status', 'I am online.'),
 )
@@ -141,7 +144,7 @@ def strip_wake_phrase(
         if normalized == normalized_wake:
             return True, ''
         if normalized.startswith(normalized_wake + ' '):
-            return True, normalized[len(normalized_wake) + 1 :].strip()
+            return True, normalized[len(normalized_wake) + 1:].strip()
         wake_with_comma = normalized_wake.replace(' ', r'\s+')
         match = re.search(rf'\b{wake_with_comma}\b\s*(.*)$', normalized)
         if match:
@@ -240,10 +243,10 @@ def validate_intent_payload(payload: dict[str, Any], source: str) -> IntentResul
 def default_reply_for_skill(skill: str) -> str:
     """Return a concise robot speech reply for an approved skill."""
     replies = {
-        'move_forward_slow': 'Moving forward for one second.',
-        'move_backward_slow': 'Backing up for one second.',
-        'turn_left_slow': 'Turning left for one second.',
-        'turn_right_slow': 'Turning right for one second.',
+        'move_forward_slow': 'Moving forward for five seconds.',
+        'move_backward_slow': 'Backing up for five seconds.',
+        'turn_left_slow': 'Turning left for five seconds.',
+        'turn_right_slow': 'Turning right for five seconds.',
         'stop': 'Stopping now.',
         'emergency_stop': 'Emergency stop. Motors stay locked out.',
         'status': 'I am online.',

@@ -21,7 +21,7 @@ class TtsBackend:
         thread.start()
 
 
-class EspeakTts:
+class EspeakTts(TtsBackend):
     """Speak short robot replies through espeak-ng."""
 
     def __init__(

@@ -206,7 +206,8 @@ class Ps2UnoToTeensy(Node):
 
     def ps2_manual_input_active(self, packet: Ps2Packet) -> bool:
         axes = [packet.ry, packet.rx, packet.ly, packet.lx]
-        axes_active = any(abs(axis - self.axis_center) > self.deadband for axis in axes)
+        effective_deadband = max(self.deadband, 25)
+        axes_active = any(abs(axis - self.axis_center) > effective_deadband for axis in axes)
         return packet.select or axes_active
 
     def manual_override_active(self, now: float) -> bool:
