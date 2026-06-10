@@ -1,0 +1,67 @@
+voice_node:
+  ros__parameters:
+    wake_phrase: "hey rudra"
+    wake_phrase_aliases:
+      - "hey rudra"
+      - "rudra"
+      - "hey robot"
+      - "hello robot"
+      - "robot"
+      - "hey deidre"
+      - "hey redra"
+      - "he redraw"
+      - "here to draw"
+      - "read dre"
+      - "he bought"
+    use_vosk_command_grammar: true
+    allow_non_motion_without_wake: true
+    sample_rate: 16000
+    vosk_model_path: "~/Projects/RUDRAv4/models/vosk-model-small-en-us-0.15"
+    ollama_url: "http://localhost:11434/api/chat"
+    ollama_model: "qwen2.5:3b"
+    ollama_timeout_sec: 15.0
+    use_llm_router: true
+    tts_backend: "piper"
+    tts_espeak_voice: "en-us+f3"
+    tts_espeak_rate_wpm: 155
+    tts_espeak_pitch: 45
+    tts_espeak_amplitude: 180
+    tts_piper_model_path: "/home/rudra/Projects/RUDRAv4/models/piper/en_US-amy-medium.onnx"
+    tts_piper_executable: "/home/rudra/Projects/RUDRAv4/tools/piper/piper"
+    audio_device_keywords:
+      - "plantronics"
+      - "poly"
+      - "calisto"
+      - "usb audio"
+    listen_while_speaking: false
+    motion:
+      enable_voice_motion: true
+      publish_topic: "/cmd_vel_voice_request"
+      safe_output_topic: "/cmd_vel_safe"
+      max_linear_x: 0.08
+      max_reverse_x: -0.06
+      max_angular_z: 0.35
+      default_motion_duration_sec: 1.0
+      require_timeout: true
+      allow_continuous_motion: false
+      ps2_manual_override_enabled: true
+
+command_guard_node:
+  ros__parameters:
+    joy_topic: "/joy"
+    ps2_raw_topic: "/rudra/ps2_raw"
+    ps2_raw_axis_center: 127
+    ps2_raw_deadband: 15
+    motion:
+      enable_voice_motion: true
+      publish_topic: "/cmd_vel_voice_request"
+      safe_output_topic: "/cmd_vel_safe"
+      max_linear_x: 0.08
+      max_reverse_x: -0.06
+      max_angular_z: 0.35
+      default_motion_duration_sec: 1.0
+      require_timeout: true
+      allow_continuous_motion: false
+      ps2_manual_override_enabled: true
+      manual_override_timeout_sec: 0.35
+      manual_override_deadband: 0.05

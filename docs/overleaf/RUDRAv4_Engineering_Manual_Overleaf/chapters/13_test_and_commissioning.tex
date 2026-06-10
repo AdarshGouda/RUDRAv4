@@ -124,6 +124,30 @@ ros2 topic echo /diagnostics
 
 Compare reported input and output voltage to a multimeter. Validate thresholds before enabling shutdown.
 
+\section{Stage 8: integrated full launch}
+
+After the subsystem stages pass, use the canonical full launch with wheels lifted:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge rudra_full.launch.py
+\end{lstlisting}
+
+Confirm PS2, LiDAR, telemetry, localization, and voice topics are all present. Add optional launch arguments only for the feature under test:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_dcdc_monitor:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_rviz:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_ollama:=true \
+  voice_use_llm_router:=true
+\end{lstlisting}
+
+Do not test voice motion on the floor first. Keep wheels lifted, say \cmd{Hey RUDRA, stop}, then \cmd{Hey RUDRA, status}, then a single slow bounded command such as \cmd{Hey RUDRA, move forward}. \topic{/cmd_vel_safe} should publish a short pulse and then zero.
+
 \section{Acceptance matrix}
 
 \begin{longtable}{p{0.32\linewidth}p{0.24\linewidth}p{0.34\linewidth}}
@@ -139,5 +163,7 @@ Telemetry publishes & Run telemetry firmware & IMU and wheel odom topics publish
 EKF publishes & Localization launch & \topic{/odometry/filtered} alive with plausible values.\\
 Power diagnostics publish & DCDC monitor & \topic{/rudra/nuc_battery} and diagnostics update.\\
 Remote RViz works & Aghora viewer & Scan, marker, and odom visible in correct frame.\\
+Voice deterministic command works & Full launch or voice-only launch & \topic{/rudra_voice/intent} publishes \cmd{status} or \cmd{stop}; speech reply is heard.\\
+Voice safe motion is bounded & Full launch with lifted wheels & \topic{/cmd_vel_safe} publishes a short clamped pulse, then zero; PS2/manual input still has priority.\\
 \bottomrule
 \end{longtable}

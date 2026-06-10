@@ -13,16 +13,60 @@ Before launching robot nodes:
   \item Source overlays in order: base ROS, external LiDAR workspace, then RUDRAv4.
 \end{enumerate}
 
+\section{Launch cheat sheet}
+
+The normal operator entry point is the full launch file. It starts the robot-side graph: PS2 manual bridge, Teensy serial owner, LiDAR, obstacle guard, localization, voice, and optional helpers. Use this first unless a chapter explicitly asks for a lower-level commissioning launch.
+
+\begin{lstlisting}[language=bash,caption={Default full robot launch.}]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge rudra_full.launch.py
+\end{lstlisting}
+
+\begin{longtable}{p{0.36\linewidth}p{0.54\linewidth}}
+\toprule
+Need & Launch option\\
+\midrule
+Normal full robot & none\\
+Disable voice & \cmd{enable_voice:=false}\\
+Show RViz on this machine & \cmd{enable_rviz:=true}\\
+Enable NUC power diagnostics & \cmd{enable_dcdc_monitor:=true}\\
+Start/check Ollama only & \cmd{enable_ollama:=true}\\
+Let voice use Ollama & \cmd{enable_ollama:=true voice_use_llm_router:=true}\\
+Use another LiDAR path & \cmd{serial_port:=/dev/serial/by-id/<actual-lidar-id>}\\
+\bottomrule
+\end{longtable}
+
+\begin{lstlisting}[language=bash,caption={Common full-launch variants.}]
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_voice:=false
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_rviz:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_dcdc_monitor:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_ollama:=true \
+  voice_use_llm_router:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  serial_port:=/dev/serial/by-id/<actual-lidar-id>
+\end{lstlisting}
+
+\begin{operatorbox}{One launch, optional toggles}
+Do not run \filep{scripts/start_ollama.sh} before the full launch during normal operation. When \cmd{enable_ollama:=true}, \filep{rudra_full.launch.py} invokes that helper for you. The helper script remains useful for one-time diagnostics and model downloads.
+\end{operatorbox}
+
 \section{Mode selection}
 
 \begin{longtable}{p{0.24\linewidth}p{0.34\linewidth}p{0.32\linewidth}}
 \toprule
 Mode & Use when & Command\\
 \midrule
+Full robot & Normal integrated bringup: PS2, Teensy, LiDAR, obstacle guard, localization, and voice & \cmd{ros2 launch rudra_base_bridge rudra_full.launch.py}\\
+Full robot + Ollama & Full bringup with voice LLM routing enabled & \cmd{ros2 launch rudra_base_bridge rudra_full.launch.py voice_use_llm_router:=true enable_ollama:=true}\\
+Full robot + DCDC & Normal NUC-mounted robot bringup with power diagnostics & \cmd{ros2 launch rudra_base_bridge rudra_full.launch.py enable_dcdc_monitor:=true}\\
 PS2 only & Basic manual drive without LiDAR driver & \cmd{bash scripts/run_ps2_bridge.sh}\\
 PS2 + LiDAR & Manual driving with \topic{/scan} and obstacle guard & \cmd{bash scripts/run_ps2_lidar_bridge.sh}\\
 PS2 + LiDAR + localization & Full development bringup with IMU/wheel odom and EKF & \cmd{bash scripts/run_ps2_lidar_localization.sh}\\
-PS2 + LiDAR + localization + DCDC & Full robot bringup with NUC power diagnostics & \cmd{ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py enable_dcdc_monitor:=true}\\
+\pkg{rudra_voice} & Voice command interface with P610, Vosk STT, optional Ollama, and guarded voice motion output & \cmd{ros2 launch rudra_voice rudra_voice.launch.py}\\
 \topic{/cmd_vel} bridge & Keyboard teleop, Nav2, autonomy, or external command publisher & \cmd{bash scripts/run_cmd_vel_bridge.sh}\\
 LiDAR only & Sensor and RViz debug without drive bridge & \cmd{bash scripts/run_lidar.sh}\\
 DCDC monitor only & Power rail debug & \cmd{ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py}\\
@@ -30,28 +74,57 @@ DCDC monitor only & Power rail debug & \cmd{ros2 launch rudra_base_bridge dcdc_u
 \end{longtable}
 
 \begin{safetybox}{One Teensy owner only}
-Do not run \pkg{ps2_uno_to_teensy} and \pkg{cmd_vel_to_teensy} at the same time. Both write to the same Teensy serial port.
+Do not run \pkg{ps2_uno_to_teensy} and \pkg{cmd_vel_to_teensy} at the same time. Both write to the same Teensy serial port. The full launch uses \pkg{ps2_uno_to_teensy} as the single Teensy owner. Voice motion enters that same bridge through \topic{/cmd_vel_safe} only when PS2/manual input is idle.
 \end{safetybox}
 
 \section{Full bringup sequence}
 
-On Rudra:
+The clean operator command on \cmd{rudra} is:
 
 \begin{lstlisting}[language=bash]
 cd /home/rudra/Projects/RUDRAv4
-bash scripts/list_serial.sh
 source /opt/ros/lyrical/setup.bash
 source /home/rudra/ros2_ws/install/setup.bash
 source install/setup.bash
-bash scripts/run_ps2_lidar_localization.sh
+ros2 launch rudra_base_bridge rudra_full.launch.py
 \end{lstlisting}
 
-With the DCDC-USB powering the NUC, use the same launch file with the monitor enabled:
+With the DCDC-USB powering the NUC, enable power diagnostics:
 
 \begin{lstlisting}[language=bash]
-ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
+ros2 launch rudra_base_bridge rudra_full.launch.py \
   enable_dcdc_monitor:=true
 \end{lstlisting}
+
+If Ollama is installed and the natural-language router should be checked before launch, add:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_dcdc_monitor:=true \
+  enable_ollama:=true \
+  voice_use_llm_router:=true
+\end{lstlisting}
+
+The full launch starts these robot-side pieces:
+
+\begin{itemize}
+  \item \pkg{ps2_uno_to_teensy}: reads Uno PS2 packets, writes the only Teensy drive serial stream, publishes telemetry, and applies LiDAR obstacle avoidance.
+  \item \pkg{ydlidar_ros2_driver_node}: publishes \topic{/scan} in frame \cmd{laser}.
+  \item Static transforms for \cmd{base_link -> laser} and \cmd{base_link -> imu_link}.
+  \item \pkg{robot_localization} EKF and \pkg{odom_tf_broadcaster}.
+  \item \pkg{rudra_voice}: Vosk STT, deterministic intent parser, Piper/eSpeak speech output, and \pkg{command_guard_node}.
+  \item Optional \pkg{dcdc_usb_monitor}, optional Ollama helper, and optional RViz.
+\end{itemize}
+
+Voice motion flow in the full launch is:
+
+\begin{lstlisting}
+voice_node -> /cmd_vel_voice_request -> command_guard_node -> /cmd_vel_safe -> ps2_uno_to_teensy -> Teensy
+\end{lstlisting}
+
+This means \topic{/cmd_vel_safe} is not merely a debug topic. In the full launch, it is the guarded voice input to the single Teensy bridge. PS2 input still wins: if the sticks or SELECT are active, voice motion is ignored until manual input is idle.
+
+By default, the full launch keeps \pkg{use\_llm\_router} off. That makes the voice stack stick to deterministic commands like \cmd{status}, \cmd{stop}, and \cmd{move forward} even when Ollama is not running. \cmd{enable_ollama:=true} starts or checks the Ollama service. \cmd{voice_use_llm_router:=true} is the separate switch that lets voice send uncertain phrases to Ollama.
 
 On Aghora:
 
@@ -82,6 +155,11 @@ ros2 topic echo --once /odometry/filtered
 ros2 topic echo /tf
 ros2 topic echo /rudra/nuc_battery
 ros2 topic echo /diagnostics
+ros2 topic echo /rudra_voice/transcript
+ros2 topic echo /rudra_voice/intent
+ros2 topic echo /rudra_voice/reply
+ros2 topic echo /cmd_vel_voice_request
+ros2 topic echo /cmd_vel_safe
 \end{lstlisting}
 
 \section{What good looks like}
@@ -100,6 +178,8 @@ Observation & Interpretation\\
 \topic{/tf} includes \cmd{odom -> base_link} & RViz can place odom, scan, and robot body in the same tree.\\
 \topic{/rudra/nuc_battery} publishes & DCDC-USB monitor sees the NUC power rail.\\
 \topic{/diagnostics} contains \cmd{rudra_nuc_dcdc} & NUC input voltage, output range, and sag warnings are visible.\\
+\topic{/rudra_voice/transcript} publishes after \cmd{Hey RUDRA} phrases & P610 audio, Vosk, and wake phrase processing are active.\\
+\topic{/cmd_vel_safe} publishes a short pulse then zero & Voice guard accepted a bounded motion request and timed it out safely.\\
 RViz displays scan and marker & DDS domain, TF, and display settings are correct.\\
 \bottomrule
 \end{longtable}

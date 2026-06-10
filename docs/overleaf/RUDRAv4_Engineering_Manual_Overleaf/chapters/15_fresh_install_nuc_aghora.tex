@@ -242,6 +242,79 @@ colcon build --symlink-install --packages-select ydlidar_ros2_driver
 source install/setup.bash
 \end{lstlisting}
 
+\section{Install the voice stack on the NUC}
+\pkg{rudra_voice} needs a small Python environment that is separate from system Python but still able to see ROS Python packages. This is the fix for the \cmd{No module named 'sounddevice'} failure seen when ROS launches the node with the wrong interpreter.
+
+Install audio and Python system dependencies:
+
+\begin{lstlisting}[language=bash,caption={Voice OS dependencies.}]
+sudo apt update
+sudo apt install -y \
+  alsa-utils espeak-ng \
+  python3-venv python3-pip \
+  libportaudio2 portaudio19-dev \
+  curl wget unzip
+\end{lstlisting}
+
+Create the project voice virtual environment:
+
+\begin{lstlisting}[language=bash,caption={Voice Python virtual environment.}]
+cd /home/rudra/Projects/RUDRAv4
+python3 -m venv --system-site-packages .venv_voice
+source .venv_voice/bin/activate
+python -m pip install --upgrade pip
+python -m pip install vosk sounddevice numpy requests
+python -c "import sounddevice, vosk, requests; print('voice python ok')"
+\end{lstlisting}
+
+\begin{designbox}{Why \cmd{--system-site-packages} is intentional}
+ROS 2 Lyrical installs important Python modules through apt. The voice stack installs speech packages through pip. The \filep{.venv_voice} environment with \cmd{--system-site-packages} lets one Python interpreter see both worlds. If pip reports \cmd{externally-managed-environment}, pip is pointed at the system interpreter instead of \filep{.venv_voice}.
+\end{designbox}
+
+Download the Vosk speech-recognition model:
+
+\begin{lstlisting}[language=bash,caption={Vosk model install.}]
+mkdir -p /home/rudra/Projects/RUDRAv4/models
+cd /home/rudra/Projects/RUDRAv4/models
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+\end{lstlisting}
+
+Install Piper locally for human-sounding offline speech. This keeps the install reproducible even when \cmd{sudo apt install piper} is not available or requires an interactive password:
+
+\begin{lstlisting}[language=bash,caption={Local Piper install.}]
+cd /home/rudra/Projects/RUDRAv4
+mkdir -p tools/piper models/piper
+curl -L --fail -o /tmp/piper_linux_x86_64.tar.gz \
+  https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+tar -xzf /tmp/piper_linux_x86_64.tar.gz -C tools/piper --strip-components=1
+curl -L --fail -o models/piper/en_US-amy-medium.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx
+curl -L --fail -o models/piper/en_US-amy-medium.onnx.json \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json
+printf 'I am online. Ready for safe commands.\n' | \
+  tools/piper/piper --model models/piper/en_US-amy-medium.onnx \
+  --output_file /tmp/rudra_piper_test.wav
+aplay /tmp/rudra_piper_test.wav
+\end{lstlisting}
+
+Check the P610 microphone and speakerphone:
+
+\begin{lstlisting}[language=bash,caption={P610 audio check.}]
+lsusb
+arecord -l
+aplay -l
+arecord -f S16_LE -r 16000 -c 1 -d 5 /tmp/rudra_p610_test.wav
+aplay /tmp/rudra_p610_test.wav
+\end{lstlisting}
+
+Ollama is optional. Install it only if natural-language routing is needed beyond deterministic commands. The full robot launch can start or check Ollama for you when \cmd{enable_ollama:=true}; the helper script below is also useful as a one-time readiness check after installation.
+
+\begin{lstlisting}[language=bash,caption={Optional Ollama setup.}]
+curl -fsSL https://ollama.com/install.sh | sh
+bash /home/rudra/Projects/RUDRAv4/scripts/start_ollama.sh qwen2.5:3b
+\end{lstlisting}
+
 \section{Shell environment for every terminal}
 Add the following block to \filep{~/.bashrc} on \cmd{rudra}.  On \cmd{aghora}, omit the external LiDAR workspace if it is not cloned locally.
 
@@ -319,12 +392,48 @@ ros2 topic echo /chatter
   \item \ros{} Lyrical installed and sourced on both machines.
   \item \cmd{ROS_DOMAIN_ID=42} on both machines.
   \item RUDRAv4 workspace cloned and built.
+  \item \filep{.venv_voice} exists and \cmd{python -c "import sounddevice, vosk, requests"} succeeds inside it.
+  \item Vosk model exists under \filep{models/vosk-model-small-en-us-0.15}.
+  \item Piper binary exists at \filep{tools/piper/piper}; Piper test audio plays through \cmd{aplay}.
+  \item \cmd{espeak-ng} is installed as the fallback speech output.
   \item NUC user belongs to \cmd{dialout} and \cmd{plugdev}.
   \item Teensy rules installed.
   \item \filep{/dev/serial/by-id} shows Uno, Teensy, and LiDAR adapter.
   \item Aghora can SSH into \cmd{rudra}.
   \item Aghora can see ROS topics from \cmd{rudra}.
 \end{enumerate}
+
+\section{First integrated launch after clean setup}
+After the checklist passes, use the single full launch file:
+
+\begin{lstlisting}[language=bash,caption={Integrated RUDRAv4 bringup on the NUC.}]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source install/setup.bash
+ros2 launch rudra_base_bridge rudra_full.launch.py
+\end{lstlisting}
+
+For the normal robot-mounted NUC, enable DCDC monitoring:
+
+\begin{lstlisting}[language=bash,caption={Integrated launch with NUC power monitoring.}]
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_dcdc_monitor:=true
+\end{lstlisting}
+
+To let the voice stack use Ollama for uncertain phrases, opt in explicitly:
+
+\begin{lstlisting}[language=bash,caption={Integrated launch with Ollama voice routing.}]
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_dcdc_monitor:=true \
+  enable_ollama:=true \
+  voice_use_llm_router:=true
+\end{lstlisting}
+
+Expected early launch signs are: the launch prints the voice Python as \filep{.venv_voice/bin/python}, the P610 is detected by name, \topic{/scan} appears after the LiDAR finishes startup, \topic{/rudra/wheel_odom} and \topic{/rudra/imu/raw} publish from Teensy telemetry, \topic{/odometry/filtered} publishes from the EKF, and \topic{/rudra_voice/transcript} updates when speech is heard. The full launch keeps \cmd{voice_use_llm_router} off unless you turn it on, so deterministic voice commands work even if Ollama is stopped.
+
+\begin{operatorbox}{First launch rule of thumb}
+After a clean NUC install, use \cmd{ros2 launch rudra_base_bridge rudra_full.launch.py} as the main bringup command. Add launch arguments only for the capability being tested: \cmd{enable_dcdc_monitor:=true} for NUC power diagnostics, \cmd{enable_rviz:=true} for local visualization, and \cmd{enable_ollama:=true voice_use_llm_router:=true} for LLM-assisted voice phrases.
+\end{operatorbox}
 
 \begin{safetybox}{Do not test motion yet}
 The purpose of this chapter is to rebuild the software platform.  Wheels should stay lifted or motor battery power should stay disconnected until the firmware and serial bridge chapters have been validated.

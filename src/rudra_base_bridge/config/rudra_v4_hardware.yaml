@@ -13,6 +13,7 @@ ps2_uno_to_teensy:
     axis_center: 127
     axis_range: 127
     deadband: 15
+    wheelbase_m: 0.29
     max_sabertooth_cmd: 127
 
     # Published /cmd_vel preview for ROS2 integration
@@ -20,6 +21,15 @@ ps2_uno_to_teensy:
     max_linear_speed_mps: 1.20
     max_angular_speed_radps: 2.50
     send_stop_when_disabled: true
+
+    # Full robot launch voice path. The voice package publishes guarded,
+    # clamped motion to /cmd_vel_safe. This node remains the only Teensy serial
+    # writer and forwards /cmd_vel_safe only while PS2/manual input is idle.
+    enable_voice_cmd_vel: true
+    voice_cmd_vel_topic: "/cmd_vel_safe"
+    voice_cmd_timeout_sec: 0.30
+    manual_override_timeout_sec: 0.35
+
     publish_teensy_telemetry: true
     imu_topic: "/rudra/imu/raw"
     wheel_odom_topic: "/rudra/wheel_odom"

@@ -10,6 +10,27 @@ colcon build --packages-select rudra_base_bridge
 source install/setup.bash
 \end{lstlisting}
 
+Voice package build:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source .venv_voice/bin/activate
+colcon build --packages-select rudra_voice
+source install/setup.bash
+\end{lstlisting}
+
+Full robot build:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source /home/rudra/ros2_ws/install/setup.bash
+source .venv_voice/bin/activate
+colcon build --packages-select rudra_base_bridge rudra_voice
+source install/setup.bash
+\end{lstlisting}
+
 With LiDAR overlay:
 
 \begin{lstlisting}[language=bash]
@@ -28,6 +49,25 @@ ls -l /dev/serial/by-id/
 \section{Launch commands}
 
 \begin{lstlisting}[language=bash]
+# Default full robot
+ros2 launch rudra_base_bridge rudra_full.launch.py
+
+# Full robot with selected options
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_voice:=false
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_rviz:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py enable_dcdc_monitor:=true
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_ollama:=true \
+  voice_use_llm_router:=true
+
+# Voice-only tests
+ros2 launch rudra_voice rudra_voice.launch.py use_llm_router:=false
+ros2 launch rudra_voice rudra_voice.launch.py use_llm_router:=true
+\end{lstlisting}
+
+Subsystem scripts below are for commissioning and isolation, not the normal operator path:
+
+\begin{lstlisting}[language=bash]
 bash scripts/run_ps2_bridge.sh
 bash scripts/run_ps2_lidar_bridge.sh
 bash scripts/run_ps2_lidar_localization.sh
@@ -38,6 +78,11 @@ bash scripts/view_localization.sh
 ros2 launch rudra_base_bridge dcdc_usb_monitor.launch.py
 ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
   enable_dcdc_monitor:=true
+ros2 launch rudra_voice rudra_voice.launch.py
+ros2 launch rudra_voice rudra_voice.launch.py \
+  use_venv:=true \
+  venv_python:=/home/rudra/Projects/RUDRAv4/.venv_voice/bin/python
+ros2 launch rudra_voice rudra_voice.launch.py use_llm_router:=false
 \end{lstlisting}
 
 \section{Topic monitors}
@@ -56,6 +101,30 @@ ros2 topic echo --once /odometry/filtered
 ros2 topic echo /tf
 ros2 topic echo /rudra/nuc_battery
 ros2 topic echo /diagnostics
+ros2 topic echo /rudra_voice/transcript
+ros2 topic echo /rudra_voice/intent
+ros2 topic echo /rudra_voice/reply
+ros2 topic echo /cmd_vel_voice_request
+ros2 topic echo /cmd_vel_safe
+\end{lstlisting}
+
+\section{Voice setup and guard tests}
+
+\begin{lstlisting}[language=bash]
+sudo apt install -y alsa-utils espeak-ng python3-venv python3-pip \
+  libportaudio2 portaudio19-dev wget unzip
+python3 -m venv --system-site-packages .venv_voice
+source .venv_voice/bin/activate
+python -m pip install --upgrade pip
+python -m pip install vosk sounddevice numpy requests
+python -c "import sounddevice, vosk, requests; print('voice python ok')"
+\end{lstlisting}
+
+\begin{lstlisting}[language=bash]
+ros2 topic pub /cmd_vel_voice_request geometry_msgs/msg/Twist \
+  "{linear: {x: 0.08}, angular: {z: 0.0}}" -1
+ros2 topic pub /rudra_voice/intent std_msgs/msg/String "{data: stop}" -1
+ros2 topic pub /rudra_voice/intent std_msgs/msg/String "{data: emergency_stop}" -1
 \end{lstlisting}
 
 \section{DCDC-USB checks}

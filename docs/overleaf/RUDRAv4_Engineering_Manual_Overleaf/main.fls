@@ -419,6 +419,9 @@ INPUT chapters/10_lidar_obstacle_guard.aux
 INPUT ./chapters/11_localization_and_tf.aux
 INPUT ./chapters/11_localization_and_tf.aux
 INPUT chapters/11_localization_and_tf.aux
+INPUT ./chapters/24_voice_ai.aux
+INPUT ./chapters/24_voice_ai.aux
+INPUT chapters/24_voice_ai.aux
 INPUT ./chapters/12_launch_and_monitor.aux
 INPUT ./chapters/12_launch_and_monitor.aux
 INPUT chapters/12_launch_and_monitor.aux
@@ -697,6 +700,12 @@ OUTPUT chapters/11_localization_and_tf.aux
 INPUT ./chapters/11_localization_and_tf.tex
 INPUT ./chapters/11_localization_and_tf.tex
 INPUT chapters/11_localization_and_tf.tex
+INPUT ./chapters/24_voice_ai.tex
+INPUT ./chapters/24_voice_ai.tex
+OUTPUT chapters/24_voice_ai.aux
+INPUT ./chapters/24_voice_ai.tex
+INPUT ./chapters/24_voice_ai.tex
+INPUT chapters/24_voice_ai.tex
 INPUT ./chapters/12_launch_and_monitor.tex
 INPUT ./chapters/12_launch_and_monitor.tex
 OUTPUT chapters/12_launch_and_monitor.aux
@@ -803,6 +812,9 @@ INPUT chapters/10_lidar_obstacle_guard.aux
 INPUT ./chapters/11_localization_and_tf.aux
 INPUT ./chapters/11_localization_and_tf.aux
 INPUT chapters/11_localization_and_tf.aux
+INPUT ./chapters/24_voice_ai.aux
+INPUT ./chapters/24_voice_ai.aux
+INPUT chapters/24_voice_ai.aux
 INPUT ./chapters/12_launch_and_monitor.aux
 INPUT ./chapters/12_launch_and_monitor.aux
 INPUT chapters/12_launch_and_monitor.aux

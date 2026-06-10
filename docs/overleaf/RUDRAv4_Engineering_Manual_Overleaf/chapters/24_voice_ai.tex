@@ -1,0 +1,299 @@
+\chapter{RUDRA Voice AI v0.5}
+
+\section{Purpose}
+
+\pkg{rudra_voice} adds local voice control for RUDRAv4 on the Intel NUC using the Plantronics/Poly Calisto P610 USB speakerphone. It supports deterministic wake-phrase commands first, with optional Ollama routing for natural-language phrases.
+
+The voice interface is deliberately conservative. Voice can request motion, but it cannot directly drive motors. The voice node publishes approved motion requests to \topic{/cmd_vel_voice_request}; \pkg{command_guard_node} clamps and times out those requests before publishing \topic{/cmd_vel_safe}. In the full robot launch, \pkg{ps2_uno_to_teensy} consumes \topic{/cmd_vel_safe} only while PS2/manual input is idle, then converts that guarded command into the same Teensy serial stream used for manual driving.
+
+\begin{safetybox}{Voice is never the raw motor authority}
+The voice node and the LLM must never publish raw \topic{/cmd_vel}, write to the Teensy, write to the Arduino Uno, or send commands directly to the Sabertooth drivers. Physical E-stop remains highest priority. PS2/manual control has priority over voice.
+\end{safetybox}
+
+\section{Architecture}
+
+\begin{figure}[htbp]
+\centering
+\resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[node distance=8mm and 8mm]
+\node[rudraHw] (mic) {Plantronics/Poly\\Calisto P610};
+\node[rudraBlock,right=of mic] (stt) {Vosk STT};
+\node[rudraBlock,right=of stt] (wake) {Wake phrase\\\cmd{hey rudra}};
+\node[rudraBlock,right=of wake] (parser) {Deterministic\\parser};
+\node[rudraBlock,below=of parser] (ollama) {Optional Ollama\\JSON router};
+\node[rudraTopic,right=of parser] (intent) {\topic{/rudra_voice/intent}};
+\node[rudraTopic,below=of intent] (req) {\topic{/cmd_vel_voice_request}};
+\node[rudraBlock,right=of req] (guard) {Command guard\\clamp + timeout};
+\node[rudraTopic,right=of guard] (safe) {\topic{/cmd_vel_safe}};
+\node[rudraBlock,right=of safe] (base) {\pkg{ps2\_uno\_to\_teensy}\\idle-only voice input};
+\node[rudraHw,right=of base] (motor) {Teensy\\Sabertooth};
+\draw[rudraArrow] (mic) -- (stt);
+\draw[rudraArrow] (stt) -- (wake);
+\draw[rudraArrow] (wake) -- (parser);
+\draw[rudraDashed] (parser) -- (ollama);
+\draw[rudraArrow] (parser) -- (intent);
+\draw[rudraDashed] (ollama) -- (intent);
+\draw[rudraArrow] (intent) -- (req);
+\draw[rudraArrow] (req) -- (guard);
+\draw[rudraArrow] (guard) -- (safe);
+\draw[rudraArrow] (safe) -- (base);
+\draw[rudraArrow] (base) -- (motor);
+\end{tikzpicture}}
+\caption{Voice command path. Only the guard publishes the safe velocity output.}
+\end{figure}
+
+\section{ROS interfaces}
+
+\begin{longtable}{p{0.34\linewidth}p{0.18\linewidth}p{0.38\linewidth}}
+\toprule
+Topic & Type & Purpose\\
+\midrule
+\topic{/rudra_voice/transcript} & \cmd{std_msgs/String} & Final speech transcript from Vosk.\\
+\topic{/rudra_voice/intent} & \cmd{std_msgs/String} & Approved skill name after deterministic or LLM routing.\\
+\topic{/rudra_voice/reply} & \cmd{std_msgs/String} & Short speech response for TTS and operator monitoring.\\
+\topic{/rudra_voice/llm_raw} & \cmd{std_msgs/String} & Raw Ollama JSON content for debugging.\\
+\topic{/rudra_voice/status} & \cmd{std_msgs/String} & Voice-node and guard status messages.\\
+\topic{/rudra_voice/motion_request} & \cmd{std_msgs/String} & Human-readable motion skill request.\\
+\topic{/cmd_vel_voice_request} & \cmd{geometry_msgs/Twist} & Approved voice motion request before guard arbitration.\\
+\topic{/cmd_vel_safe} & \cmd{geometry_msgs/Twist} & Guarded velocity output from the voice package. In \cmd{rudra_full.launch.py}, \pkg{ps2_uno_to_teensy} forwards this to the Teensy only while PS2/manual input is idle.\\
+\topic{/joy} & \cmd{sensor_msgs/Joy} & Optional manual override input.\\
+\topic{/rudra/ps2_raw} & \cmd{std_msgs/String} & Existing PS2 serial stream used as a manual override signal.\\
+\bottomrule
+\end{longtable}
+
+\section{Safe motion skills}
+
+\begin{longtable}{p{0.28\linewidth}p{0.18\linewidth}p{0.18\linewidth}p{0.24\linewidth}}
+\toprule
+Skill & Linear x & Angular z & Duration\\
+\midrule
+\cmd{move_forward_slow} & \SI{0.08}{m/s} & \SI{0.0}{rad/s} & \SI{1.0}{s}\\
+\cmd{move_backward_slow} & \SI{-0.06}{m/s} & \SI{0.0}{rad/s} & \SI{1.0}{s}\\
+\cmd{turn_left_slow} & \SI{0.0}{m/s} & \SI{0.35}{rad/s} & \SI{1.0}{s}\\
+\cmd{turn_right_slow} & \SI{0.0}{m/s} & \SI{-0.35}{rad/s} & \SI{1.0}{s}\\
+\cmd{stop} & \SI{0.0}{m/s} & \SI{0.0}{rad/s} & Immediate\\
+\cmd{emergency_stop} & \SI{0.0}{m/s} & \SI{0.0}{rad/s} & Immediate and latched for the node run\\
+\bottomrule
+\end{longtable}
+
+Open-ended motion requests such as \cmd{drive forward forever}, \cmd{faster}, \cmd{full speed}, \cmd{follow me}, and \cmd{go to location} are rejected or routed to \cmd{chat_only}.
+
+\section{One-time setup on the NUC}
+
+The confusing part of this package is Python ownership. ROS console scripts are generated with the system Python, but Vosk, \pkg{sounddevice}, and \pkg{requests} live in the project voice virtual environment. The launch file intentionally runs the voice nodes through \filep{/home/rudra/Projects/RUDRAv4/.venv_voice/bin/python}; if launch falls back to \filep{/usr/bin/python3}, the common symptom is \cmd{No module named 'sounddevice'}.
+
+Install operating-system audio dependencies:
+
+\begin{lstlisting}[language=bash]
+sudo apt update
+sudo apt install -y alsa-utils espeak-ng python3-venv python3-pip \
+  libportaudio2 portaudio19-dev wget unzip curl
+\end{lstlisting}
+
+Create the voice virtual environment. The \cmd{--system-site-packages} option lets the environment see ROS Python packages while still holding pip-installed voice dependencies:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+python3 -m venv --system-site-packages .venv_voice
+source .venv_voice/bin/activate
+python -m pip install --upgrade pip
+python -m pip install vosk sounddevice numpy requests
+\end{lstlisting}
+
+Verify the environment:
+
+\begin{lstlisting}[language=bash]
+source /home/rudra/Projects/RUDRAv4/.venv_voice/bin/activate
+python -c "import sounddevice, vosk, requests; print('voice python ok')"
+\end{lstlisting}
+
+If this import fails, do not install packages into \filep{/usr/bin/python3}. Re-activate \filep{.venv_voice} and run the pip commands again. Ubuntu's \cmd{externally-managed-environment} warning is a sign that pip is being aimed at the wrong interpreter.
+
+Download the Vosk model:
+
+\begin{lstlisting}[language=bash]
+mkdir -p /home/rudra/Projects/RUDRAv4/models
+cd /home/rudra/Projects/RUDRAv4/models
+wget https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+unzip vosk-model-small-en-us-0.15.zip
+\end{lstlisting}
+
+Install the local Piper voice used by the default configuration. This avoids needing a system-wide Piper install:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+mkdir -p tools/piper models/piper
+curl -L --fail -o /tmp/piper_linux_x86_64.tar.gz \
+  https://github.com/rhasspy/piper/releases/download/2023.11.14-2/piper_linux_x86_64.tar.gz
+tar -xzf /tmp/piper_linux_x86_64.tar.gz -C tools/piper --strip-components=1
+curl -L --fail -o models/piper/en_US-amy-medium.onnx \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx
+curl -L --fail -o models/piper/en_US-amy-medium.onnx.json \
+  https://huggingface.co/rhasspy/piper-voices/resolve/main/en/en_US/amy/medium/en_US-amy-medium.onnx.json
+printf 'I am online. Ready for safe commands.\n' | \
+  tools/piper/piper --model models/piper/en_US-amy-medium.onnx \
+  --output_file /tmp/rudra_piper_test.wav
+aplay /tmp/rudra_piper_test.wav
+\end{lstlisting}
+
+The project configuration points at \filep{/home/rudra/Projects/RUDRAv4/tools/piper/piper} and \filep{/home/rudra/Projects/RUDRAv4/models/piper/en_US-amy-medium.onnx}. A system package named \cmd{piper} may require \cmd{sudo}; the local binary above avoids that dependency and keeps a fresh NUC reproducible.
+
+Optional Ollama setup:
+
+\begin{lstlisting}[language=bash]
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen2.5:3b
+\end{lstlisting}
+
+Ollama is optional. Deterministic commands such as \cmd{status}, \cmd{stop}, \cmd{move forward}, and \cmd{turn left} do not require it. In the full robot launch, deterministic mode is the default because \cmd{voice_use_llm_router:=false}. If Ollama is missing or stopped, the voice node reports \cmd{Local language model is not responding} only when LLM routing is enabled and a phrase needs the LLM.
+
+\section{Audio hardware check}
+
+Plug the P610 into the NUC and verify capture/playback:
+
+\begin{lstlisting}[language=bash]
+lsusb
+arecord -l
+aplay -l
+arecord -f S16_LE -r 16000 -c 1 -d 5 /tmp/rudra_p610_test.wav
+aplay /tmp/rudra_p610_test.wav
+\end{lstlisting}
+
+\section{Build and launch}
+
+Build:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source .venv_voice/bin/activate
+colcon build --packages-select rudra_voice rudra_base_bridge
+source install/setup.bash
+\end{lstlisting}
+
+Launch voice by itself for microphone and speech testing:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_voice rudra_voice.launch.py
+\end{lstlisting}
+
+Launch the whole robot, including voice, through the integrated bringup:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_full.launch.py
+\end{lstlisting}
+
+Enable NUC power monitoring when needed:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_dcdc_monitor:=true
+\end{lstlisting}
+
+Enable optional Ollama routing only when testing natural-language phrases that are outside the deterministic command set:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_ollama:=true \
+  voice_use_llm_router:=true
+\end{lstlisting}
+
+\cmd{enable_ollama:=true} starts or checks the Ollama service through the launch file. \cmd{voice_use_llm_router:=true} is the separate switch that lets the voice node send uncertain phrases to Ollama.
+
+The launch file should report the Python interpreter it is using:
+
+\begin{lstlisting}
+RUDRA voice launch using Python: /home/rudra/Projects/RUDRAv4/.venv_voice/bin/python
+\end{lstlisting}
+
+It should also detect the P610:
+
+\begin{lstlisting}
+Using audio input "Plantronics P610: USB Audio (hw:1,0)" and output "Plantronics P610: USB Audio (hw:1,0)".
+\end{lstlisting}
+
+To force the venv explicitly:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_voice rudra_voice.launch.py \
+  use_venv:=true \
+  venv_python:=/home/rudra/Projects/RUDRAv4/.venv_voice/bin/python
+\end{lstlisting}
+
+To debug using the console-script default Python:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_voice rudra_voice.launch.py use_venv:=false
+\end{lstlisting}
+
+\section{Topic tests}
+
+Open a second terminal and source the workspace:
+
+\begin{lstlisting}[language=bash]
+cd /home/rudra/Projects/RUDRAv4
+source /opt/ros/lyrical/setup.bash
+source .venv_voice/bin/activate
+source install/setup.bash
+\end{lstlisting}
+
+Watch transcripts:
+
+\begin{lstlisting}[language=bash]
+ros2 topic echo /rudra_voice/transcript
+\end{lstlisting}
+
+Say:
+
+\begin{lstlisting}
+Hey RUDRA, status
+\end{lstlisting}
+
+Watch intents and replies:
+
+\begin{lstlisting}[language=bash]
+ros2 topic echo /rudra_voice/intent
+ros2 topic echo /rudra_voice/reply
+\end{lstlisting}
+
+Watch motion requests and guarded output:
+
+\begin{lstlisting}[language=bash]
+ros2 topic echo /cmd_vel_voice_request
+ros2 topic echo /cmd_vel_safe
+\end{lstlisting}
+
+Test the guard without voice:
+
+\begin{lstlisting}[language=bash]
+ros2 topic pub /cmd_vel_voice_request geometry_msgs/msg/Twist \
+  "{linear: {x: 0.08}, angular: {z: 0.0}}" -1
+\end{lstlisting}
+
+\topic{/cmd_vel_safe} should publish the clamped command, then publish zero after timeout.
+
+\section{Common bring-up failures}
+
+\begin{longtable}{p{0.34\linewidth}p{0.56\linewidth}}
+\toprule
+Symptom & Corrective action\\
+\midrule
+\cmd{No module named 'sounddevice'} & Confirm launch prints the \filep{.venv_voice/bin/python} path. If not, rebuild and source \filep{install/setup.bash}.\\
+\cmd{PortAudio library not found} & Install \pkg{libportaudio2} and \pkg{portaudio19-dev}.\\
+\cmd{externally-managed-environment} & Ubuntu is blocking pip installs into \filep{/usr/bin/python3}. Use \filep{.venv_voice}; the launch file is designed for it.\\
+\cmd{Vosk model not found} & Confirm \filep{/home/rudra/Projects/RUDRAv4/models/vosk-model-small-en-us-0.15} exists.\\
+P610 not found by name & Check \cmd{arecord -l} and \cmd{aplay -l}; unplug and replug the P610. The node will fall back to default audio if needed.\\
+\cmd{Local language model is not responding} & Ollama is optional. Deterministic commands still work. For LLM routing, launch with both \cmd{enable_ollama:=true} and \cmd{voice_use_llm_router:=true}; confirm \cmd{qwen2.5:3b} is pulled.\\
+\cmd{Read timed out} from Ollama & The model is running slowly or cold-starting. Confirm \param{ollama_timeout_sec} is \cmd{15.0} or higher in \filep{rudra_voice.yaml}.\\
+Voice motion rejected & Check for active PS2/manual input on \topic{/joy} or \topic{/rudra/ps2_raw}. Manual control has priority.\\
+\bottomrule
+\end{longtable}
+
+\section{Repository links}
+
+\repoDir{src/rudra_voice}{\filep{src/rudra_voice}}
+
+\repoFile{src/rudra_voice/README.md}{\filep{src/rudra_voice/README.md}}
+
+\repoFile{src/rudra_voice/launch/rudra_voice.launch.py}{\filep{src/rudra_voice/launch/rudra_voice.launch.py}}
+
+\repoFile{src/rudra_voice/config/rudra_voice.yaml}{\filep{src/rudra_voice/config/rudra_voice.yaml}}

@@ -14,7 +14,7 @@ The primary package is:
 src/rudra_base_bridge
 \end{lstlisting}
 
-The package is Python-based, but it carries firmware sketches, YAML configuration, RViz files, and launch files. This is acceptable for a robot-development workspace because the package is the unit of bringup, not merely the unit of Python code.
+The package is Python-based, but it carries firmware sketches, YAML configuration, RViz files, and launch files. This is acceptable for a robot-development workspace because the package is the unit of bringup, not merely the unit of Python code. The normal operator launch is \filep{rudra_full.launch.py}; lower-level launch files and shell wrappers remain available for commissioning individual subsystems.
 
 \section{Node inventory}
 
@@ -48,6 +48,7 @@ This modularity matters because the two drive bridges should not maintain two in
 \toprule
 Launch file & Role\\
 \midrule
+\filep{rudra_full.launch.py} & Main operator launch. Starts PS2 manual bridge, Teensy serial owner, LiDAR, obstacle guard, localization, voice, and optional Ollama, RViz, and DCDC monitoring.\\
 \filep{rudra_ps2.launch.py} & Starts manual PS2 bridge only.\\
 \filep{rudra_ps2_lidar.launch.py} & Starts PS2 bridge, YDLIDAR driver, and static \cmd{base_link -> laser} transform.\\
 \filep{rudra_ps2_lidar_localization.launch.py} & Includes PS2+LiDAR launch, includes localization launch, and can optionally start DCDC monitor.\\
@@ -57,25 +58,30 @@ Launch file & Role\\
 \filep{localization.launch.py} & Starts EKF, odom TF broadcaster, and \cmd{base_link -> imu_link} static transform.\\
 \filep{localization_view.launch.py} & Starts RViz view for odometry, fused odometry, scan, and transforms.\\
 \filep{dcdc_usb_monitor.launch.py} & Starts NUC power monitor only.\\
+\filep{rudra_voice.launch.py} & Starts the voice node and command guard. The full launch includes this when \cmd{enable_voice:=true}.\\
 \bottomrule
 \end{longtable}
 
 \begin{figure}[htbp]
 \centering
 \resizebox{0.98\linewidth}{!}{\begin{tikzpicture}[node distance=7mm]
-\node[rudraBlock] (full) {\filep{rudra_ps2_lidar_localization.launch.py}};
-\node[rudraBlock,below left=of full] (ps2lidar) {\filep{rudra_ps2_lidar.launch.py}};
-\node[rudraBlock,below right=of full] (loc) {\filep{localization.launch.py}};
-\node[rudraBlock,below=of full] (dcdc) {optional\\\pkg{dcdc_usb_monitor}};
+\node[rudraBlock] (full) {\filep{rudra_full.launch.py}};
+\node[rudraBlock,below left=of full] (base) {\filep{rudra_ps2_lidar_localization.launch.py}};
+\node[rudraBlock,below right=of full] (voice) {\filep{rudra_voice.launch.py}};
+\node[rudraBlock,below=of full] (helpers) {optional\\Ollama, RViz, DCDC};
+\node[rudraBlock,below left=of base] (ps2lidar) {\filep{rudra_ps2_lidar.launch.py}};
+\node[rudraBlock,below right=of base] (loc) {\filep{localization.launch.py}};
 \node[rudraTopic,below left=of ps2lidar] (ps2) {\pkg{ps2_uno_to_teensy}};
 \node[rudraTopic,below=of ps2lidar] (lidar) {\pkg{ydlidar_ros2_driver_node}};
 \node[rudraTopic,below right=of ps2lidar] (tf1) {static TF\\\cmd{base_link -> laser}};
 \node[rudraTopic,below left=of loc] (ekf) {\pkg{ekf_filter_node}};
 \node[rudraTopic,below=of loc] (tf2) {\pkg{odom_tf_broadcaster}};
 \node[rudraTopic,below right=of loc] (imu_tf) {static TF\\\cmd{base_link -> imu_link}};
-\draw[rudraArrow] (full) -- (ps2lidar);
-\draw[rudraArrow] (full) -- (loc);
-\draw[rudraDashed] (full) -- (dcdc);
+\draw[rudraArrow] (full) -- (base);
+\draw[rudraArrow] (full) -- (voice);
+\draw[rudraDashed] (full) -- (helpers);
+\draw[rudraArrow] (base) -- (ps2lidar);
+\draw[rudraArrow] (base) -- (loc);
 \draw[rudraArrow] (ps2lidar) -- (ps2);
 \draw[rudraArrow] (ps2lidar) -- (lidar);
 \draw[rudraArrow] (ps2lidar) -- (tf1);
@@ -83,7 +89,7 @@ Launch file & Role\\
 \draw[rudraArrow] (loc) -- (tf2);
 \draw[rudraArrow] (loc) -- (imu_tf);
 \end{tikzpicture}}
-\caption{Launch dependency tree for the full manual, LiDAR, localization, and optional power-monitor bringup.}
+\caption{Launch dependency tree for the full robot bringup.}
 \end{figure}
 
 \section{Configuration files}
@@ -110,12 +116,12 @@ source install/setup.bash
 
 The checked-in \filep{scripts/build_ws.sh} wraps this idea. The build output goes into \filep{install/}. The runtime source order must still be respected in every terminal that launches robot nodes.
 
-\section{Why wrapper scripts exist}
+\section{Why wrapper scripts still exist}
 
-Wrapper scripts are not shortcuts only; they are operational safeguards. They set the domain variables, source the correct overlays, select the known-good config files, and reduce typing mistakes. For example:
+The full launch is the normal operator path. Wrapper scripts are retained for subsystem commissioning because they set domain variables, source overlays, select known-good config files, and reduce typing mistakes while testing one boundary at a time. For example:
 
 \begin{lstlisting}[language=bash]
 bash scripts/run_ps2_lidar_localization.sh
 \end{lstlisting}
 
-is less error-prone than manually typing a multi-line launch command with several file paths and substitutions.
+is useful when proving the PS2, LiDAR, and EKF stack before adding voice or optional helpers. Once commissioning passes, return to \filep{rudra_full.launch.py} for normal operation.

@@ -117,14 +117,22 @@ Before adding Nav2 or a SLAM launch, RUDRAv4 should pass the following checks:
 
 \section{Operational launch pattern}
 
-The current full robot-side bringup for manual development is:
+The current full robot-side bringup for manual development is the integrated launch:
 
 \begin{lstlisting}[language=bash]
 cd /home/rudra/Projects/RUDRAv4
 source /opt/ros/lyrical/setup.bash
 source /home/rudra/ros2_ws/install/setup.bash
 source install/setup.bash
-ros2 launch rudra_base_bridge rudra_ps2_lidar_localization.launch.py \
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_dcdc_monitor:=true
+\end{lstlisting}
+
+For navigation development where voice should not run, keep the same launch and disable voice explicitly:
+
+\begin{lstlisting}[language=bash]
+ros2 launch rudra_base_bridge rudra_full.launch.py \
+  enable_voice:=false \
   enable_dcdc_monitor:=true
 \end{lstlisting}
 

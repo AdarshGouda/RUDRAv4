@@ -23,6 +23,6 @@ The manual is chapter-split and uses TikZ/PGFPlots for diagrams and plots. It in
 Recommended Overleaf setting: Menu -> Compiler -> XeLaTeX.
 
 
-Revision note: this package includes Ubuntu setup for `rudra` and `aghora`, dedicated hardware chapters for the NUC7i7BNH, Mini-Box DCDC-USB, Sabertooth drivers, Teensy/Uno/PS2, MPU6050, customized YDLIDAR stack, robot body, batteries, BOM, current launch operations, localization/TF theory, and the staged navigation/autonomy roadmap.
+Revision note: this package includes Ubuntu setup for `rudra` and `aghora`, dedicated hardware chapters for the NUC7i7BNH, Mini-Box DCDC-USB, Sabertooth drivers, Teensy/Uno/PS2, MPU6050, customized YDLIDAR stack, robot body, batteries, BOM, current launch operations, RUDRA Voice AI v0.5 bring-up with P610/Vosk/Ollama notes, localization/TF theory, and the staged navigation/autonomy roadmap.
 
 When the workspace changes, update the implementation in the repository first. Then update this manual only when behavior, launch procedure, interfaces, theory, diagnostics, safety limits, or wiring assumptions change. If this PDF is being tied to a specific release, update `\RepoBranch` in `manual.sty` to the matching branch, tag, or commit reference.

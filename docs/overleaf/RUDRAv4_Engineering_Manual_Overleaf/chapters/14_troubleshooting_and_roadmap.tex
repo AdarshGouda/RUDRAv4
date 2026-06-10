@@ -32,12 +32,21 @@ No \topic{/rudra/ps2_raw} & Check Uno port path, close Arduino Serial Monitor, r
 \topic{/rudra/ps2_raw} present but no motion & Press SELECT, check \topic{/rudra/drive_cmd}, verify obstacle guard is not blocking forward motion.\\
 No \topic{/rudra/teensy_ack} & Check Teensy port path, firmware, USB cable, and whether another process owns the port.\\
 Motor moves wrong direction & First check wiring/motor polarity. Then check left/right side mapping. Do not blindly invert ROS signs.\\
-No \topic{/scan} & Source \filep{/home/rudra/ros2_ws/install/setup.bash}, verify LiDAR by-id path, wait 10--15 seconds after launch.\\
+No \topic{/scan} & Source \filep{/home/rudra/ros2_ws/install/setup.bash}, verify \filep{/dev/serial/by-id} contains the CP2102 LiDAR adapter, and wait 10--15 seconds after launch. If launch reports \cmd{cannot bind to the specified serial port}, run \cmd{bash scripts/list_serial.sh} and relaunch with \cmd{serial_port:=/dev/serial/by-id/<actual-lidar-id>}.\\
 RViz sees \topic{/scan} but displays nothing & Set LaserScan reliability to Best Effort and fixed frame to \cmd{base_link} or \cmd{odom} as appropriate.\\
 Obstacle guard never changes & Confirm \topic{/scan} publishes, guard enabled, marker frame is \cmd{laser}, and object is inside front cone.\\
 No \topic{/rudra/imu/raw} or \topic{/rudra/wheel_odom} & Flash telemetry Teensy firmware and ensure \param{publish_teensy_telemetry} is true.\\
 No \topic{/odometry/filtered} & Install/launch \pkg{robot_localization}, check EKF config, and confirm input topics exist.\\
 DCDC monitor stale & Verify \cmd{dcdc-usb -a} works outside ROS and USB permissions are correct.\\
+Voice launch reports \cmd{No module named 'sounddevice'} & Confirm \pkg{rudra_voice} launch is using \filep{/home/rudra/Projects/RUDRAv4/.venv_voice/bin/python}; rebuild and source \filep{install/setup.bash}.\\
+Voice launch reports \cmd{PortAudio library not found} & Install \pkg{libportaudio2} and \pkg{portaudio19-dev}.\\
+Voice launch reports \cmd{externally-managed-environment} during pip install & Do not install into \filep{/usr/bin/python3}; use \filep{.venv_voice} with \cmd{--system-site-packages}.\\
+Voice launch cannot find P610 & Check \cmd{arecord -l}, \cmd{aplay -l}, USB connection, and P610 enumeration.\\
+Voice says \cmd{Local language model is not responding} & This affects only LLM-routed phrases. Deterministic commands still work. Launch with both \cmd{enable_ollama:=true} and \cmd{voice_use_llm_router:=true}, then confirm \cmd{ollama list} contains \cmd{qwen2.5:3b}.\\
+Ollama reports \cmd{Read timed out} & The model may be cold-starting or overloaded. Confirm \param{ollama_timeout_sec} is \cmd{15.0} or higher and retry after \cmd{scripts/start_ollama.sh} reports ready.\\
+Voice sees \topic{/scan} publisher but receives no scans & The LiDAR driver uses best-effort sensor QoS. Voice subscriptions must use sensor-data QoS; rebuild and source after updating \pkg{rudra_voice}.\\
+Voice motion rejected & Check for active PS2/manual input on \topic{/joy} or \topic{/rudra/ps2_raw}; manual control has priority.\\
+\cmd{LiDAR obstacle guard disabled by ps2_latch} & This is PS2 latch behavior, not an Ollama or voice failure. Use the configured PS2 guard controls or disable the latch feature in \filep{rudra_v4_hardware.yaml} only for controlled testing.\\
 \bottomrule
 \end{longtable}
 
@@ -52,6 +61,7 @@ RUDRAv4 is now a suitable foundation for staged improvements. The recommended or
   \item \textbf{Add wheel-speed PID}: only after encoder signs/scales are validated. Start with low speeds and lifted wheels.
   \item \textbf{Introduce SLAM}: add map generation only after \cmd{odom -> base_link} and \cmd{base_link -> laser} are stable.
   \item \textbf{Introduce Nav2}: use \topic{/cmd_vel} bridge as the actuation endpoint and preserve the low-level obstacle guard as a final filter.
+  \item \textbf{Harden guarded voice output}: \pkg{ps2_uno_to_teensy} now consumes \topic{/cmd_vel_safe} while PS2 input is idle. Continue testing with lifted wheels, obstacle guard enabled, and short bounded commands only.
   \item \textbf{Document hardware revisions}: if motor drivers, encoders, wheel radius, or NUC power hardware change, update this manual and the YAML constants.
 \end{enumerate}
 
@@ -65,6 +75,7 @@ RUDRAv4 is now a suitable foundation for staged improvements. The recommended or
   \item Do not use \filep{/dev/ttyACM0} in permanent config when a by-id path exists.
   \item Do not add SLAM until odom and TF are stable.
   \item Do not power the NUC from a DCDC output that has not been measured under powered conditions.
+  \item Do not map voice output directly to \topic{/cmd_vel} or motor serial topics.
 \end{itemize}
 \end{safetybox}
 
